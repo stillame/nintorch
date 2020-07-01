@@ -1,5 +1,6 @@
 # nintorch
-A simple wrapper of Pytorch designed for researching and prototyping.
+A simple wrapper of Pytorch designed for researching and prototyping. <br>
+Currently, work on progress. A lot of change and error will be expected. <br>
 
 ## To install:
 ```
@@ -35,8 +36,7 @@ pytest == 5.4.3
 
 ## License:
 MIT License with some exceptions. <br>
-Please look at comments within the module.
-
-
+Some functions or classes might be coplied from other sources. <br>
+Please look at comments or docstrings within.
 
 
