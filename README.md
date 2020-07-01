@@ -35,6 +35,8 @@ pytest == 5.4.3
 ```
 
 ## License:
+```
 MIT License with some exceptions. <br>
 Some functions or classes might be modified from other sources. <br>
 Please look at comments or docstrings within the functions and classes. <br>
+```
