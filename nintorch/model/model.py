@@ -2,40 +2,100 @@
 # -*- coding: utf-8 -*-
 """Collection of function for model.
 """
-from torchvision import models
+from functools import reduce
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+__all__ = [
+    'Conv2dSame',
+    'BaseNet',]
 
 
-def load_pretrain_from_torch(
-        net_name: str, pretrained: bool = True):
-    """Load the pretain model from pytorch pretrained models.
-    pretrained: if True downloading pretrained weight directly,
-        Otherwise using the model defintation.
+class Conv2dSame(nn.Conv2d):
+    """Convolutional layer with same padding.
     """
-    net_name = net_name.lower()
-    # TODO: adding supported_net to support more than vgg16.
-    # The name of the supported_net should be the same as the method in pytorch.
-    supported_net = ['vgg16', 'vgg16_bn']
-    
-    if net_name in supported_net:
-        pretain_model = getattr(models, net_name)(pretrained=pretrained)
-    else:
-        raise NotImplementedError(f'Not in support list: {supported_net}')
-    return pretain_model
+    def __init__(self, *args, **kwargs):
+        super(Conv2dSame, self).__init__(*args, **kwargs)
+
+    def _conv_forward(self, input, weight):
+        kernel_w = weight.shape[-2]
+        kernel_h = weight.shape[-1]
+        self.padding = (math.floor(kernel_w/2), math.floor(kernel_h/2))
+        return F.conv2d(
+            input, weight, self.bias, self.stride,
+            self.padding, self.dilation, self.groups)
+
+    def forward(self, input):
+        return self._conv_forward(input, self.weight)
 
 
-def replace_layer_from_name(
-        model, name_to_replace: str, layer_to_replace_with):
+class BaseNet(nn.Module):
+    """BaseNet: basic model class.
+    TODO: load_pretrain weight, save model, load model.
     """
-    """
-    model_with_replace = setattr(model, name_to_replace, layer_to_replace_with)
-    return model_with_replace
+    def __init__(self, *args, **kwargs):
+        super(BaseNet, self).__init__(*args, **kwargs)
 
+    def save_all(self, path: str):
+        torch.save(self, path)
 
-def filter_state_dict(model, filter_kw: str):
-    """Using filter_kw to filter out the state_dict.
-    After using this then please using method load_state_dict from Module to load the pretrain model.
-    """
-    name_without_kw = list(
-        filter(lambda x: x.find(filter_kw) < 0, model.state_dict()))
-    filtered_state_dict = {i: model.state_dict()[i] for i in name_without_kw}
-    return filtered_state_dict
+    @staticmethod
+    def load_all(path: str):
+        model = torch.load(path)
+        return BaseNet(model)
+
+    def save_state_dict(self):
+        return
+
+    @staticmethod
+    def flatten(f_map: torch.tensor):
+        """For converting the output activation from convolutional layer
+        to the dense layer.
+        """
+        assert hasattr(f_map, 'shape')
+        num_f = reduce(lambda x, y: x*y, f_map.shape[1:])
+        return f_map.view(-1, num_f)
+
+    def init_weight_bias(self, init_funct=None) -> None:
+        """Provided init_funct to apply to model.
+        Modified from: https://github.com/kuangliu/pytorch-cifar/blob/master/utils.py
+        TODO: need more support layers.
+        """
+        if init_funct is None:
+            def init_funct(module):
+                """Default weight and bias initization.
+                """
+                if isinstance(module, nn.Conv2d):
+                    nn.init.kaiming_normal_(module.weight, mode='fan_out')
+                    nn.init.constant_(module.bias, 0)
+                elif isinstance(module, nn.Linear):
+                    nn.init.normal_(module.weight, std=1e-3)
+                    nn.init.constant_(module.bias, 0)
+                elif isinstance(module, nn.BatchNorm2d):
+                    nn.init.constant_(module.weight, 1)
+                    nn.init.constant_(module.bias, 0)
+        self.apply(init_funct)
+
+    def track_stat(self, writer, global_step: int):
+        """Given the tensorboard writer to tracking the statistical analysis.
+        Return std and mean of each layers.
+        Return mean and std from each layer that contains parameters.
+        """
+        for name_l, layer in self.named_children():
+            params = list(layer.parameters())
+            if not len(params) == 0:
+                w, b = params[0], params[1]
+                writer.add_scalar(f'{name_l}_w_std', w.std(), global_step)
+                writer.add_scalar(f'{name_l}_b_std', b.std(), global_step)
+                writer.add_scalar(f'{name_l}_w_mean', w.mean(), global_step)
+                writer.add_scalar(f'{name_l}_b_mean', b.mean(), global_step)
+
+    def track_dist_weight_bias(self, writer, global_step: int):
+        """Using of tensorboard to tracking distributions for each
+        weight and bias in each layer of model.
+        """
+        for name_l, layer in self.named_children():
+            params = list(layer.parameters())
+            if not len(params) == 0:
+                writer.add_histogram(f'{name_l}_w', params[0], global_step)
+                writer.add_histogram(f'{name_l}_b', params[1], global_step)

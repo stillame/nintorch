@@ -2,9 +2,11 @@ import pandas as pd
 from loguru import logger
 import torch
 from apex import amp
-from .utils import AvgMeter, is_module_imported
+from .utils import AvgMeter
+from ninstd.check import is_imported
 import torch.optim as optim
 
+__all__ = ['Trainer', 'HalfTrainer']
 
 class Trainer(object):
     """Class responsed for training and testing.
@@ -312,122 +314,3 @@ class HalfTrainer(Trainer):
             self.model, self.optim = amp.initialize(
                 self.model, self.optim, opt_level=self.opt_level)
 
-
-class NetwithSubNetsTrainer(Trainer):
-    """TODO: testing the model.
-    TODO: update with apex.
-    """
-    def __init__(self, *args, **kwargs):
-        super(NetwithSubNetsTrainer, self).__init__(*args, **kwargs)
-        self.models = None
-        self.records = None
-        
-        
-    def load_models(self, *models):
-        # self.models = [self.model] + list(models)
-        self.models = list(models)
-        self.records = [self.gen_recorder() for _ in models]
-    
-    def _check_train(self):
-        assert self.train_loader is not None
-        assert self.model is not None
-        assert self.optim is not None
-        assert self.loss_func is not None
-        assert len(self.models) > 0
-        
-    def forwarding_models(self, data, label, model):
-        batch = label.data.size(0)
-        data, label = data.to(self.device), label.to(self.device)
-        multi_loss = 0.0
-        pred = model.forward(data)
-        loss = self.loss_func(pred, label)
-        _, max_pred = torch.max(pred.data, 1)
-        correct = (max_pred == label).sum().item()
-        multi_loss += loss
-        return correct, loss, multi_loss.item(), batch
-    
-    def forwarding_and_updating_models(self, data, label, model):
-        batch = label.data.size(0)
-        data, label = data.to(self.device), label.to(self.device)
-        self.optim.zero_grad()
-        multi_loss = 0.0
-        pred = model.forward(data)
-        loss = self.loss_func(pred, label)
-        _, max_pred = torch.max(pred.data, 1)
-        correct = (max_pred == label).sum().item()
-        multi_loss += loss
-        multi_loss.backward()
-        self.optim.step()
-        return correct, loss, multi_loss.item(), batch
-    
-    def train_an_epoch(self, verbose: int=0):
-        self._check_train()
-        self._epoch_idx += 1
-        avg_acc = [AvgMeter() for _ in range(len(self.models))]
-        avg_loss = [AvgMeter() for _ in range(len(self.models))]
-        header = 'Training'
-        
-        for train_data, train_label in self.train_loader:
-            for idx, model in enumerate(self.models):
-                model.train()
-                correct, loss, multi_loss, batch = self.forwarding_and_updating_models(
-                    train_data, train_label, model)
-                avg_acc[idx](correct, batch)
-                avg_loss[idx](multi_loss, batch)
-
-        for i in range(len(self.models)):
-            if verbose > 0:
-                self.log_info(
-                    header=header, epoch=self._epoch_idx, 
-                    acc=avg_acc[i].avg, loss=avg_loss[i].avg)
-                
-            if self.writer is not None:
-                self.add_scalars(
-                    group_name=header, 
-                    updating_dict={
-                        'train_acc': avg_acc[idx].avg,
-                        'train_loss': avg_loss[idx].avg}, 
-                    idx=self._epoch_idx)
-                
-            if self.records is not None:
-                self.records[i]['train_acc'][self._epoch_idx] = avg_acc[idx].avg
-                self.records[i]['train_loss'][self._epoch_idx] = avg_loss[idx].avg
-                
-        if self.scheduler is not None:
-            self.scheduler.step()
-            
-    def test_an_epoch(self, verbose: int=0):
-        self._check_test()
-        avg_acc = [AvgMeter() for _ in range(len(self.models))]
-        avg_loss = [AvgMeter() for _ in range(len(self.models))]
-        header = 'Testing'
-        
-        for test_data, test_label in self.test_loader:
-            for idx, model in enumerate(self.models):
-                model.eval()
-                correct, loss, multi_loss, batch = self.forwarding_models(
-                    test_data, test_label, model)
-                avg_acc[idx](correct, batch)
-                avg_loss[idx](multi_loss, batch)
-
-        for i in range(len(self.models)):
-            if verbose > 0:
-                self.log_info(
-                    header=header, epoch=self._epoch_idx, 
-                    acc=avg_acc[i].avg, loss=avg_loss[i].avg)
-                
-            if self.writer is not None:
-                self.add_scalars(
-                    group_name=header, 
-                    updating_dict={
-                        'test_acc': avg_acc[idx].avg,
-                        'test_loss': avg_loss[idx].avg}, 
-                    idx=self._epoch_idx)
-                
-            if self.records is not None:
-                self.records[i]['test_acc'][self._epoch_idx] = avg_acc[idx].avg
-                self.records[i]['test_loss'][self._epoch_idx] = avg_loss[idx].avg
-                
-        if self.scheduler is not None:
-            self.scheduler.step()
-            
