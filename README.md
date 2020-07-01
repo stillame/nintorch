@@ -31,12 +31,11 @@ pandas == 1.0.3
 matplotlib == 3.1.3
 loguru == 0.5.0
 pytest == 5.4.3
-
 ```
 
 ## License:
 ```
-MIT License with some exceptions. <br>
-Some functions or classes might be modified from other sources. <br>
-Please look at comments or docstrings within the functions and classes. <br>
+MIT License with some exceptions.
+Some functions or classes might be modified from other sources.
+Please look at comments or docstrings within the functions and classes.
 ```
