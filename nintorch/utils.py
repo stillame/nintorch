@@ -6,6 +6,7 @@ import os
 import random
 from loguru import logger
 import torch
+import numpy as np
 
 __all__ = [
     'seed_torch',

@@ -1,12 +1,20 @@
+# !/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Collection of wrapper for training and evaluting pytorch model.
+"""
 import pandas as pd
 from loguru import logger
 import torch
 from apex import amp
-from .utils import AvgMeter
-from ninstd.check import is_imported
 import torch.optim as optim
+from ninstd.check import is_imported
+from .utils import AvgMeter, torch_cpu_or_gpu
 
-__all__ = ['Trainer', 'HalfTrainer']
+
+__all__ = [
+    'Trainer',
+    'HalfTrainer']
+
 
 class Trainer(object):
     """Class responsed for training and testing.
@@ -15,11 +23,13 @@ class Trainer(object):
     TODO: fine-grained forwarding.
     TODO: if best then saving the model.
     TODO: adding input into the checking to cover more assert.
-    TODO: look at other works kaggle.
+    TODO: look at other works kaggler.
+    TODO: Adding optuna hyper-tuning.
+    TODO: Checking is that cover the not image dataset.
     """
     def __init__(
             self, model=None, optim=None, loss_func=None,
-            train_loader=None, valid_loader=None, 
+            train_loader=None, valid_loader=None,
             test_loader=None, scheduler=None, writer=None,
             *args, **kwargs):
         
@@ -167,10 +177,10 @@ class Trainer(object):
         
         if self.writer is not None:
             self.add_scalars(
-                group_name=header, 
+                group_name=header,
                 updating_dict={
-                    'test_acc': avg_acc.avg, 
-                    'test_loss': avg_loss.avg}, 
+                    'test_acc': avg_acc.avg,
+                    'test_loss': avg_loss.avg},
                 idx=self._epoch_idx)
             
         if verbose > 0:
@@ -197,7 +207,7 @@ class Trainer(object):
         
         if self.writer is not None:
             self.add_scalars(
-                group_name=header, 
+                group_name=header,
                 updating_dict={'valid_acc': avg_acc.avg, 'valid_loss': avg_loss.avg}, 
                 idx=self._epoch_idx)
         
@@ -223,18 +233,18 @@ class Trainer(object):
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-        
+
         self.record['train_acc'][self._epoch_idx] = avg_acc.avg
         self.record['train_loss'][self._epoch_idx] = avg_loss.avg
-        
+
         if self.scheduler is not None:
             self.scheduler.step()
-            
+
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self._epoch_idx, 
+                header=header, epoch=self._epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
-    
+
     def swap_to_sgd(self, lr: float=None) -> None:
         """Swap into SGD with provided value.
         """
@@ -242,10 +252,10 @@ class Trainer(object):
             if self.optim is None:
                 # TODO: making my own exception?
                 raise RuntimeError('')
-            else: 
+            else:
                 lr = self.optim.param_groups[0]['lr']
         self.optim = optim.SGD(self.model.parameters(), lr)
-    
+
 
 class HalfTrainer(Trainer):
     """Trainer with the supporting of the mixed precision training.
@@ -305,7 +315,7 @@ class HalfTrainer(Trainer):
             if self.optim is None:
                 # TODO: making my own exception?
                 raise RuntimeError('')
-            else: 
+            else:
                 lr = self.optim.param_groups[0]['lr']
         if not self._half_flag:
             self.optim = optim.SGD(self.model.parameters(), lr)
