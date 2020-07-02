@@ -18,6 +18,8 @@ nintorch_____compress
 	  |__dataset
 	  |__model
 	  |__model_zoo
+	  |__hyper
+	  |__image
 ```
 
 ## Requirements:
@@ -31,6 +33,7 @@ pandas == 1.0.3
 matplotlib == 3.1.3
 loguru == 0.5.0
 pytest == 5.4.3
+opencv-python ==
 ```
 
 ## License:
