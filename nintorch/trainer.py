@@ -285,11 +285,12 @@ class HyperTrainer(Trainer):
         else:
             self._check_test()
         if trial_funct is None or trial is None:
-            raise NotImplemented(f'{}')
+            raise NotImplementedError(f'{}')
         else:
             kwargs = trial_funct(trial)
-            
         # TODO: changing 
+        if kwargs[''] is not None:
+            pass
 
 
     

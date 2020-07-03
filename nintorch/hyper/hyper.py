@@ -9,10 +9,13 @@ __all__ = [
 
 
 def start_tuning(
-    objective, direction: str = 'maximize', num_trials: int = 100):
+    objective, direction: str = 'maximize', num_trials: int = 100, simpler = None):
+    """TODO: checking the default value of simpler.
     """
-    """
-    study = optuna.create_study(direction=direction)
+    if simpler is None:
+        study = optuna.create_study(direction=direction)
+    else:
+        study = optuna.create_study(direction=direction, simpler=simpler)
     study.optimize(objective, n_trials=num_trials)
     return study
 
