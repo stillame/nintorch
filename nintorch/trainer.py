@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 """Collection of wrapper for training and evaluting pytorch model.
 """
+import warnings
 import pandas as pd
 from loguru import logger
 from apex import amp
+import optuna
 import torch
 import torch.optim as optim
-import optuna
 from ninstd.check import is_imported
 from .utils import AvgMeter, torch_cpu_or_gpu
 
@@ -275,25 +276,26 @@ class HyperTrainer(Trainer):
         self.valid_or_test = valid_or_test
 
     def train_eval_epoches(
-        self, epoch: int, eval_every_epoch: int, trial_funct = None, trial = None):
+        self, epoch: int, eval_every_epoch: int, trial_funct, trial):
         """Train and test for certain epoches with an option
-        to turn on the hyper parameter tunning
+        to turn on the hyper parameter tunning.
+        For trial_funct, please follow nintorch.hyper.default_trial.
         """
         self._check_train()
         if self.valid_or_test:
             self._check_valid()
         else:
             self._check_test()
-        if trial_funct is None or trial is None:
-            raise NotImplementedError(f'{}')
-        else:
-            kwargs = trial_funct(trial)
-        # TODO: changing 
-        if kwargs[''] is not None:
-            pass
+        kwargs = trial_funct(trial)
 
+        # TODO: cover more than lr and weight decay.
+        if 'lr' in kwargs:
+            self.optim.param_groups[0]['lr'] = kwargs['lr']
+        if 'weight_decay' in kwargs:
+            self.optim.param_groups[0]['weight_decay'] = kwargs['weight_decay']
+        if len(kwargs) > 2:
+            warnings.warn('kwargs is more than 2 might not supported.', UserWarning)
 
-    
         for i in range(epoch):
             train_acc, train_loss = self.train_an_epoch()
             if self.valid_or_test:
@@ -307,23 +309,14 @@ class HyperTrainer(Trainer):
                 if self.valid_or_test:
                     self.record['valid_acc'][i] = valid_acc
                     self.record['valid_loss'][i] = valid_loss
+                    trial.report(valid_acc, i)
                 else:
                     self.record['test_acc'][i] = test_acc
                     self.record['test_loss'][i] = test_loss
+                    trial.report(test_acc, i)
 
-            trial.report(test_acc, i)
             if trial.should_prune():
                 raise optuna.exception.TrialPruned()
-
-
-
-    def update_params(self):
-        """
-        """
-
-        return
-
-
 
 
 class HalfTrainer(Trainer):

@@ -13,13 +13,15 @@ pip install nintorch
 
 ## Directory tree:
 ```
-nintorch_____compress
-	  |__type
-	  |__dataset
-	  |__model
-	  |__model_zoo
-	  |__hyper
-	  |__image
+nintorch____compress
+	    |___dataset
+	    |___ensemble
+	    |___hyper
+	    |___image
+	    |___model
+	    |___model_zoo
+	    |___test
+		|___type
 ```
 
 ## Requirements:
@@ -34,6 +36,7 @@ matplotlib == 3.1.3
 loguru == 0.5.0
 pytest == 5.4.3
 opencv-python ==
+numpy == 1.18.1
 ```
 
 ## License:
