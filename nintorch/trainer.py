@@ -288,8 +288,9 @@ class HyperTrainer(Trainer):
             raise NotImplementedError(f'{}')
         else:
             kwargs = trial_funct(trial)
-            
         # TODO: changing 
+        if kwargs[''] is not None:
+            pass
 
 
     
