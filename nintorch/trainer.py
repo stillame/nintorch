@@ -275,7 +275,7 @@ class HyperTrainer(Trainer):
         self.valid_or_test = valid_or_test
 
     def train_eval_epoches(
-        self, epoch: int, valid_every_epoch: int, trial_funct = None, trial = None):
+        self, epoch: int, eval_every_epoch: int, trial_funct = None, trial = None):
         """Train and test for certain epoches with an option
         to turn on the hyper parameter tunning
         """
@@ -285,7 +285,7 @@ class HyperTrainer(Trainer):
         else:
             self._check_test()
         if trial_funct is None or trial is None:
-            raise NotImplemented(f'{}')
+            raise NotImplementedError(f'{}')
         else:
             kwargs = trial_funct(trial)
             
@@ -302,9 +302,13 @@ class HyperTrainer(Trainer):
             self.record['train_acc'][i] = train_acc
             self.record['train_loss'][i] = train_loss
 
-            if i % test_every_epoch == 0 and i != 0:
-                self.record['test_acc'][i] = test_acc
-                self.record['test_loss'][i] = test_loss
+            if i % eval_every_epoch == 0 and i != 0:
+                if self.valid_or_test:
+                    self.record['valid_acc'][i] = valid_acc
+                    self.record['valid_loss'][i] = valid_loss
+                else:
+                    self.record['test_acc'][i] = test_acc
+                    self.record['test_loss'][i] = test_loss
 
             trial.report(test_acc, i)
             if trial.should_prune():

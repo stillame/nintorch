@@ -1,6 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+"""The collection of modules, which does not belong to any other sections.
 """
 import os
 import random
