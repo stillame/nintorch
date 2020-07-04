@@ -42,3 +42,9 @@ MIT License with some exceptions.
 Some functions or classes might be modified from other sources.
 Please look at comments or docstrings within the functions and classes.
 ```
+
+## TODO:
+- Adding grad-cam.
+- Adding unitest.
+- Adding type hinting.
+- Adding example.
