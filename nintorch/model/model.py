@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Collection of function for model.
 """
+import math
 from functools import reduce
 import torch
 import torch.nn as nn

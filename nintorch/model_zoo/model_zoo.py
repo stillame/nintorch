@@ -5,8 +5,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..model import BaseNet
+from ..model import BaseNet, Conv2dSame
 
+
+__all__ = [
+    'LeNet5', 
+    'VGG16BN']
 
 class LeNet5(BaseNet):
     def __init__(self, in_chl: int = 3):
@@ -54,7 +58,7 @@ class VGG16BN(BaseNet):
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, stride=2, ceil_mode=False),
-            
+
             Conv2dSame(64, 128, 3),
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
@@ -62,7 +66,7 @@ class VGG16BN(BaseNet):
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, stride=2, ceil_mode=False),
-            
+
             Conv2dSame(128, 256, 3),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
@@ -73,7 +77,7 @@ class VGG16BN(BaseNet):
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, stride=2, ceil_mode=False),
-            
+
             Conv2dSame(256, 512, 3),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
@@ -104,4 +108,4 @@ class VGG16BN(BaseNet):
         x = self.classifier(x)
         x = F.log_softmax(x, dim=-1)
         return x
-    
+

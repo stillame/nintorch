@@ -25,8 +25,6 @@ def default_trial(trial):
     In this case, weight decay and learning rate.
     """
     weight_decay = trial.suggest_loguniform('weight_decay', 1e-5, 1e-2)
-    lr = trial.suggest_loguniform('lr', 1e-3, 1e-1)
-    return {'weight_decay': weight_decay, 'lr': lr}
-
+    return {'weight_decay': weight_decay}
 
 
