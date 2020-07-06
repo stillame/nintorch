@@ -21,6 +21,7 @@ __all__ = [
 
 class Trainer(object):
     """Class responsed for training and testing.
+    TODO: Update all self.df self.dfs and others.
     """
     def __init__(
             self, model=None, optim=None, loss_func=None,
@@ -38,28 +39,32 @@ class Trainer(object):
         self.scheduler = scheduler
         self.writer = writer
         self.device = torch_cpu_or_gpu()
-        self._epoch_idx = 0
-        # self.record = self.gen_recorder()
-        self.record = None
+        self.epoch_idx = 0
+        self.dfs = {}
 
     @staticmethod
-    def gen_record() -> pd.DataFrame:
-        return pd.DataFrame.from_dict(
-            {'train_acc': [], 'test_acc': [], 'valid_acc': [],
-             'train_loss': [], 'test_loss': [], 'valid_loss': []})
+    def gen_df(cols: List[str], index: int) -> None:
+        df = pd.DataFrame(column=cols, index=range(index))
+        return df
 
-    def _check_train(self):
+    def update_dfs(self, name_df: str, cols: List[str], index: int):
+        if name_df not in self.dfs.keys():
+            df = self.gen_df(cols, index)
+            self.dfs.update({name_df: df})
+
+
+    def _check_train(self) -> None:
         assert self.train_loader is not None
         assert self.model is not None
         assert self.optim is not None
         assert self.loss_func is not None
 
-    def _check_valid(self):
+    def _check_valid(self) -> None:
         assert self.valid_loader is not None
         assert self.model is not None
         assert self.loss_func is not None
 
-    def _check_test(self):
+    def _check_test(self) -> None:
         assert self.test_loader is not None
         assert self.model is not None
         assert self.loss_func is not None
@@ -119,10 +124,10 @@ class Trainer(object):
 
     def train_an_epoch(self, verbose: int=0):
         self._check_train()
-        self._epoch_idx += 1
+        self.epoch_idx += 1
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'Training'
+        header = 'training'
 
         self.model.train()
         for train_data, train_label in self.train_loader:
@@ -131,8 +136,9 @@ class Trainer(object):
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
 
-        self.record['train_acc'][self._epoch_idx] = avg_acc.avg
-        self.record['train_loss'][self._epoch_idx] = avg_loss.avg
+        if self.df is not None:
+            self.df['train_acc'][self.epoch_idx] = avg_acc.avg
+            self.df['train_loss'][self.epoch_idx] = avg_loss.avg
 
         if self.scheduler is not None:
             self.scheduler.step()
@@ -143,11 +149,11 @@ class Trainer(object):
                 updating_dict={
                     'train_acc': avg_acc.avg,
                     'train_loss': avg_loss.avg},
-                idx=self._epoch_idx)
+                idx=self.epoch_idx)
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self._epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -156,7 +162,7 @@ class Trainer(object):
         self._check_test()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'Testing'
+        header = 'testing'
 
         self.model.eval()
         with torch.no_grad():
@@ -166,8 +172,9 @@ class Trainer(object):
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
 
-        self.record['test_acc'][self._epoch_idx] = avg_acc.avg
-        self.record['test_loss'][self._epoch_idx] = avg_loss.avg
+        if self.df is not None:
+            self.df['test_acc'][self.epoch_idx] = avg_acc.avg
+            self.df['test_loss'][self.epoch_idx] = avg_loss.avg
 
         if self.writer is not None:
             self.add_scalars(
@@ -175,11 +182,11 @@ class Trainer(object):
                 updating_dict={
                     'test_acc': avg_acc.avg,
                     'test_loss': avg_loss.avg},
-                idx=self._epoch_idx)
+                idx=self.epoch_idx)
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self._epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -188,7 +195,7 @@ class Trainer(object):
         self._check_valid()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'Validation'
+        header = 'validation'
 
         self.model.eval()
         with torch.no_grad():
@@ -197,19 +204,20 @@ class Trainer(object):
                     valid_data, valid_label)
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
-
-        self.record['valid_acc'][self._epoch_idx] = avg_acc.avg
-        self.record['valid_loss'][self._epoch_idx] = avg_loss.avg
+        
+        if self.df is not None:
+            self.record['valid_acc'][self.epoch_idx] = avg_acc.avg
+            self.record['valid_loss'][self.epoch_idx] = avg_loss.avg
 
         if self.writer is not None:
             self.add_scalars(
                 group_name=header,
                 updating_dict={'valid_acc': avg_acc.avg, 'valid_loss': avg_loss.avg},
-                idx=self._epoch_idx)
+                idx=self.epoch_idx)
 
         if verbose > 0:
             self.log_info(
-                header='Validation', epoch=self._epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -222,7 +230,7 @@ class Trainer(object):
         self._check_train()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'Warmup'
+        header = 'warmup'
 
         self.model.train()
         for idx, (train_data, train_label) in enumerate(self.train_loader):
@@ -232,16 +240,17 @@ class Trainer(object):
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-
-        self.record['train_acc'][self._epoch_idx] = avg_acc.avg
-        self.record['train_loss'][self._epoch_idx] = avg_loss.avg
+        
+        if self.df is not None:
+            self.df['train_acc'][self.epoch_idx] = avg_acc.avg
+            self.df['train_loss'][self.epoch_idx] = avg_loss.avg
 
         if self.scheduler is not None:
             self.scheduler.step()
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self._epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
