@@ -55,3 +55,7 @@ Please look at comments or docstrings within the functions and classes.
 - look at other works kaggler.
 - Adding optuna hyper-tuning.
 - Checking is that cover the not image dataset.
+- Adding grad-cam.
+- Adding unitest.
+- Adding type hinting.
+- Adding example.
