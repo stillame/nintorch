@@ -39,10 +39,11 @@ class Trainer(object):
         self.writer = writer
         self.device = torch_cpu_or_gpu()
         self._epoch_idx = 0
-        self.record = self.gen_recorder()
+        # self.record = self.gen_recorder()
+        self.record = None
 
     @staticmethod
-    def gen_recorder() -> pd.DataFrame:
+    def gen_record() -> pd.DataFrame:
         return pd.DataFrame.from_dict(
             {'train_acc': [], 'test_acc': [], 'valid_acc': [],
              'train_loss': [], 'test_loss': [], 'valid_loss': []})
