@@ -45,3 +45,13 @@ MIT License with some exceptions.
 Some functions or classes might be modified from other sources.
 Please look at comments or docstrings within the functions and classes.
 ```
+
+## TODO:
+- swap optim on fly, early stop when best acc cannot improve the accuarcy.
+- Automatically generate writer?
+- fine-grained forwarding.
+- if best then saving the model.
+- adding input into the checking to cover more assert.
+- look at other works kaggler.
+- Adding optuna hyper-tuning.
+- Checking is that cover the not image dataset.

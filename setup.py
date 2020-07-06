@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import setuptools
+import setuptools  # type: ignore
+
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
-
 
 setuptools.setup(
     name='nintorch',

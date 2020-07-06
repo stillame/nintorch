@@ -21,14 +21,6 @@ __all__ = [
 
 class Trainer(object):
     """Class responsed for training and testing.
-    TODO: swap optim on fly, early stop when best acc cannot improve the accuarcy.
-    TODO: Automatically generate writer?
-    TODO: fine-grained forwarding.
-    TODO: if best then saving the model.
-    TODO: adding input into the checking to cover more assert.
-    TODO: look at other works kaggler.
-    TODO: Adding optuna hyper-tuning.
-    TODO: Checking is that cover the not image dataset.
     """
     def __init__(
             self, model=None, optim=None, loss_func=None,
@@ -94,7 +86,8 @@ class Trainer(object):
         except NameError:
             print(accum_string)
         
-    def add_scalars(self, group_name: str, updating_dict: dict, idx: int):
+    def add_scalars(
+        self, group_name: str, updating_dict: dict, idx: int) -> None:
         """Adding information into a writer, Tensorboard.
         """
         assert self.writer is not None
@@ -102,28 +95,23 @@ class Trainer(object):
             group_name, updating_dict, global_step=idx)
         
     def forwarding(self, data, label):
-        """For testing and validation.
-        Need to using with the with torch.no_grad():
+        """For forwarding a model.
+        Need to using with the with torch.no_grad() in case evalutation.
         """
         batch = label.data.size(0)
         data, label = data.to(self.device), label.to(self.device)
         pred = self.model.forward(data)
-        loss = self.loss_func(pred, label).item()
+        loss = self.loss_func(pred, label)
         _, max_pred = torch.max(pred.data, 1)
         correct = (max_pred == label).sum().item()
         return correct, loss, batch
     
     def forwarding_and_updating(self, data, label):
-        """For training.
-        TODO: reuse self.forwarding(data, label) instead copy plase this one again.
+        """For training only wrapper of forwarding.
+        Adding necessary function for back-propagation.
         """
-        batch = label.data.size(0)
-        data, label = data.to(self.device), label.to(self.device)
         self.optim.zero_grad()
-        pred = self.model.forward(data)
-        loss = self.loss_func(pred, label)
-        _, max_pred = torch.max(pred.data, 1)
-        correct = (max_pred == label).sum().item()
+        correct, loss, batch = self.forwarding(data, label)
         loss.backward()
         self.optim.step()
         return correct, loss, batch
@@ -140,7 +128,7 @@ class Trainer(object):
             correct, loss, batch = self.forwarding_and_updating(
                 train_data, train_label)
             avg_acc(correct, batch)
-            avg_loss(loss, batch)
+            avg_loss(loss.item(), batch)
 
         self.record['train_acc'][self._epoch_idx] = avg_acc.avg
         self.record['train_loss'][self._epoch_idx] = avg_loss.avg
@@ -175,7 +163,7 @@ class Trainer(object):
                 correct, loss, batch = self.forwarding(
                     test_data, test_label)
                 avg_acc(correct, batch)
-                avg_loss(loss, batch)
+                avg_loss(loss.item(), batch)
 
         self.record['test_acc'][self._epoch_idx] = avg_acc.avg
         self.record['test_loss'][self._epoch_idx] = avg_loss.avg

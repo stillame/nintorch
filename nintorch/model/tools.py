@@ -16,8 +16,6 @@ def load_pretrain_from_torch(
         Otherwise using the model defintation.
     """
     net_name = net_name.lower()
-    # TODO: adding supported_net to support more than vgg16.
-    # The name of the supported_net should be the same as the method in pytorch.
     supported_net = ['vgg16', 'vgg16_bn']
 
     if net_name in supported_net:
@@ -43,3 +41,4 @@ def filter_state_dict(model, filter_kw: str):
         filter(lambda x: x.find(filter_kw) < 0, model.state_dict()))
     filtered_state_dict = {i: model.state_dict()[i] for i in name_without_kw}
     return filtered_state_dict
+
