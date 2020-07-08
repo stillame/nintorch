@@ -3,6 +3,7 @@
 """Collection of wrapper for training and evaluting pytorch model.
 """
 import warnings
+from typing import List
 import pandas as pd
 from loguru import logger
 from apex import amp
@@ -21,7 +22,6 @@ __all__ = [
 
 class Trainer(object):
     """Class responsed for training and testing.
-    TODO: Update all self.df self.dfs and others.
     """
     def __init__(
             self, model=None, optim=None, loss_func=None,
@@ -43,15 +43,25 @@ class Trainer(object):
         self.dfs = {}
 
     @staticmethod
-    def gen_df(cols: List[str], index: int) -> None:
-        df = pd.DataFrame(column=cols, index=range(index))
+    def gen_empty_df(cols: List[str]) -> pd.DataFrame:
+        df = pd.DataFrame(columns=cols)
         return df
 
-    def update_dfs(self, name_df: str, cols: List[str], index: int):
-        if name_df not in self.dfs.keys():
-            df = self.gen_df(cols, index)
-            self.dfs.update({name_df: df})
+    def dfs_append_row(self, name_df: str, **kwargs) -> None:
+        keys = list(kwargs)
+        wrapped_kwargs = {key: [kwargs[key]] for key in keys}
+        df = pd.DataFrame(wrapped_kwargs)
+        self.dfs[name_df] = self.dfs[name_df].append(df)
 
+    def check_df_exists(self, name_df: str, cols: List[str]) -> None:
+        """Check is name_df is in the dfs or not.
+        If it is not exist, generate new df in self.dfs.
+        Else replace the variable in self.dfs to empty df.
+        """
+        assert isinstance(name_df, str)
+        if name_df not in self.dfs.keys():
+            df = self.gen_empty_df(cols)
+            self.dfs.update({name_df: df})
 
     def _check_train(self) -> None:
         assert self.train_loader is not None
@@ -82,8 +92,9 @@ class Trainer(object):
             # If cannot detect the logger, then using print out.
             print(
                 f'{header} Epoch: {epoch}, Accuracy: {acc}, Loss: {loss}, Lr: {lr}')
-            
-    def log_info_any(self, header: str, *args, **kwargs):
+        
+    @staticmethod
+    def log_info_any(header: str, *args, **kwargs):
         accum_string = f'{header} '
         for kw in kwargs.keys():
             accum_string += f'{kw.capitalize()} {kwargs[kw]} '
@@ -124,10 +135,11 @@ class Trainer(object):
 
     def train_an_epoch(self, verbose: int=0):
         self._check_train()
+        HEADER: str = 'training'
         self.epoch_idx += 1
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'training'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
 
         self.model.train()
         for train_data, train_label in self.train_loader:
@@ -136,16 +148,14 @@ class Trainer(object):
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
 
-        if self.df is not None:
-            self.df['train_acc'][self.epoch_idx] = avg_acc.avg
-            self.df['train_loss'][self.epoch_idx] = avg_loss.avg
+        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
             self.scheduler.step()
 
         if self.writer is not None:
             self.add_scalars(
-                group_name=header,
+                group_name=HEADER,
                 updating_dict={
                     'train_acc': avg_acc.avg,
                     'train_loss': avg_loss.avg},
@@ -162,7 +172,8 @@ class Trainer(object):
         self._check_test()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'testing'
+        HEADER: str = 'testing'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
 
         self.model.eval()
         with torch.no_grad():
@@ -172,13 +183,11 @@ class Trainer(object):
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
 
-        if self.df is not None:
-            self.df['test_acc'][self.epoch_idx] = avg_acc.avg
-            self.df['test_loss'][self.epoch_idx] = avg_loss.avg
-
+        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
+        
         if self.writer is not None:
             self.add_scalars(
-                group_name=header,
+                group_name=HEADER,
                 updating_dict={
                     'test_acc': avg_acc.avg,
                     'test_loss': avg_loss.avg},
@@ -186,7 +195,7 @@ class Trainer(object):
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self.epoch_idx,
+                header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -195,7 +204,8 @@ class Trainer(object):
         self._check_valid()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'validation'
+        HEADER: str = 'validation'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
 
         self.model.eval()
         with torch.no_grad():
@@ -204,20 +214,18 @@ class Trainer(object):
                     valid_data, valid_label)
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
-        
-        if self.df is not None:
-            self.record['valid_acc'][self.epoch_idx] = avg_acc.avg
-            self.record['valid_loss'][self.epoch_idx] = avg_loss.avg
+
+        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.writer is not None:
             self.add_scalars(
-                group_name=header,
+                group_name=HEADER,
                 updating_dict={'valid_acc': avg_acc.avg, 'valid_loss': avg_loss.avg},
                 idx=self.epoch_idx)
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self.epoch_idx,
+                header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -230,7 +238,9 @@ class Trainer(object):
         self._check_train()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        header = 'warmup'
+        HEADER: str = 'warmup'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+
 
         self.model.train()
         for idx, (train_data, train_label) in enumerate(self.train_loader):
@@ -240,17 +250,15 @@ class Trainer(object):
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-        
-        if self.df is not None:
-            self.df['train_acc'][self.epoch_idx] = avg_acc.avg
-            self.df['train_loss'][self.epoch_idx] = avg_loss.avg
+       
+        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
             self.scheduler.step()
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self.epoch_idx,
+               header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -280,11 +288,16 @@ class HyperTrainer(Trainer):
         For trial_funct, please follow nintorch.hyper.default_trial.
         """
         self._check_train()
+        HEADER: str = 'train'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
         if self.valid_or_test:
             self._check_valid()
+            HEADER_EVAL: str = 'validation'
         else:
             self._check_test()
+            HEADER_EVAL: str = 'test'
         kwargs = trial_funct(trial)
+        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
 
         # TODO: cover more than lr and weight decay.
         if 'lr' in kwargs:
@@ -296,23 +309,14 @@ class HyperTrainer(Trainer):
 
         for i in range(epoch):
             train_acc, train_loss = self.train_an_epoch()
-            if self.valid_or_test:
-                valid_acc, valid_loss = self.valid_an_epoch()
-            else:
-                test_acc, test_loss = self.test_an_epoch()
-            self.record['train_acc'][i] = train_acc
-            self.record['train_loss'][i] = train_loss
-
+            self.dfs_append_row(HEADER, acc=train_acc, loss=train_loss)
             if i % eval_every_epoch == 0 and i != 0:
                 if self.valid_or_test:
-                    self.record['valid_acc'][i] = valid_acc
-                    self.record['valid_loss'][i] = valid_loss
-                    trial.report(valid_acc, i)
+                    eval_acc, eval_loss = self.valid_an_epoch()
                 else:
-                    self.record['test_acc'][i] = test_acc
-                    self.record['test_loss'][i] = test_loss
-                    trial.report(test_acc, i)
-
+                    eval_acc, eval_loss = self.test_an_epoch()
+                self.dfs_append_row(HEADER_EVAL, acc=eval_acc, loss=eval_loss)
+                trial.report(eval_acc, i)
             if trial.should_prune():
                 raise optuna.exception.TrialPruned()
 
