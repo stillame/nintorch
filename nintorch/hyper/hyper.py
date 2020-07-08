@@ -5,7 +5,7 @@ import optuna
 
 __all__ = [
     'start_tuning',
-    'default_search_neural_network']
+    'default_trial']
 
 
 def start_tuning(

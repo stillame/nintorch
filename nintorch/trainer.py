@@ -304,7 +304,9 @@ class HyperTrainer(Trainer):
             self.optim.param_groups[0]['lr'] = kwargs['lr']
         if 'weight_decay' in kwargs:
             self.optim.param_groups[0]['weight_decay'] = kwargs['weight_decay']
-        if len(kwargs) > 2:
+        if 'momentum' in kwargs:
+            self.optim.param_groups[0]['momentum'] = kwargs['momentum']
+        if len(kwargs) > 3:
             warnings.warn('kwargs is more than 2 might not supported.', UserWarning)
 
         for i in range(epoch):
