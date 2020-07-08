@@ -163,7 +163,7 @@ class Trainer(object):
 
         if verbose > 0:
             self.log_info(
-                header=header, epoch=self.epoch_idx,
+                header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
 
         return avg_acc.avg, avg_loss.avg
@@ -381,10 +381,9 @@ class HalfTrainer(Trainer):
                 raise RuntimeError('')
             else:
                 lr = self.optim.param_groups[0]['lr']
-        if not self._half_flag:
-            self.optim = optim.SGD(self.model.parameters(), lr)
-        else:
-            self.optim = optim.SGD(self.model.parameters(), lr)
+ 
+        self.optim = optim.SGD(self.model.parameters(), lr)
+        if self._half_flag:
             self.model, self.optim = amp.initialize(
                 self.model, self.optim, opt_level=self.opt_level)
 
