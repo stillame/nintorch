@@ -282,7 +282,7 @@ class HyperTrainer(Trainer):
         self.valid_or_test = valid_or_test
 
     def train_eval_epoches(
-        self, epoch: int, eval_every_epoch: int, trial_funct, trial):
+        self, epoch: int, eval_every_epoch: int, verbose: int, trial_funct, trial):
         """Train and test for certain epoches with an option
         to turn on the hyper parameter tunning.
         For trial_funct, please follow nintorch.hyper.default_trial.
@@ -311,17 +311,31 @@ class HyperTrainer(Trainer):
 
         for i in range(epoch):
             train_acc, train_loss = self.train_an_epoch()
+            
+            if verbose > 0:
+                self.log_info(
+                   header=HEADER, epoch=self.epoch_idx,
+                    acc=train_acc, loss=train_loss)
+
             self.dfs_append_row(HEADER, acc=train_acc, loss=train_loss)
             if i % eval_every_epoch == 0 and i != 0:
                 if self.valid_or_test:
                     eval_acc, eval_loss = self.valid_an_epoch()
                 else:
                     eval_acc, eval_loss = self.test_an_epoch()
+
+                if verbose > 0:
+                    self.log_info(
+                       header=HEADER_EVAL, epoch=self.epoch_idx,
+                        acc=eval_acc, loss=eval_loss)
+
                 self.dfs_append_row(HEADER_EVAL, acc=eval_acc, loss=eval_loss)
                 trial.report(eval_acc, i)
             if trial.should_prune():
                 raise optuna.exception.TrialPruned()
+        
 
+        return eval_acc
 
 class HalfTrainer(Trainer):
     """Trainer with the supporting of the mixed precision training.
