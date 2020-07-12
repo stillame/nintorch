@@ -1,5 +1,7 @@
 """Collection of scripts related to hyper parameter tuning.
 """
+from 
+from typing import Callable
 import optuna
 
 
@@ -26,5 +28,12 @@ def default_trial(trial):
     """
     weight_decay = trial.suggest_loguniform('weight_decay', 1e-5, 1e-2)
     return {'weight_decay': weight_decay}
+
+
+def objective(trainer, func_trial: Callable) -> float:
+    """Objective function 
+    """ 
+    func_trial 
+    return
 
 

@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 """Collection of wrapper for training and evaluting pytorch model.
 """
-from typing import List, Tuple
+import warnings
+from typing import List
 import pandas as pd
 from loguru import logger
 from apex import amp
-import numpy as np
+import optuna
 import torch
 import torch.optim as optim
 from ninstd.check import is_imported
@@ -15,8 +16,8 @@ from .utils import AvgMeter, torch_cpu_or_gpu
 
 __all__ = [
     'Trainer',
-    'HalfTrainer'
-]
+    'HalfTrainer',
+    'HyperTrainer']
 
 
 class Trainer(object):
@@ -43,29 +44,10 @@ class Trainer(object):
 
     @staticmethod
     def gen_empty_df(cols: List[str]) -> pd.DataFrame:
-        """Generate empty dataframe given column names.
-        """
         df = pd.DataFrame(columns=cols)
         return df
 
-    def get_best(self, name_df: str, col: str, direction: str = 'max') -> float:
-        """Return the best value in either `max` or `min` direction from self.dfs.
-        """
-        assert isinstance(name_df, str)
-        assert isinstance(col, str)
-        assert isinstance(direction, str)
-        if direction.lower() == 'max':
-            return np.amax(self.dfs[name_df][col])
-        elif direction.lower() == 'min':
-            return np.amin(self.dfs[name_df][col])
-        else:
-            raise NotImplementedError(
-                f'Direction: {direction} is not `max` or `min`.')
-
     def dfs_append_row(self, name_df: str, **kwargs) -> None:
-        """Given name_df or key of dfs, access df within dfs.
-        Append a row from the dict kwargs to that df.
-        """
         keys = list(kwargs)
         wrapped_kwargs = {key: [kwargs[key]] for key in keys}
         df = pd.DataFrame(wrapped_kwargs)
@@ -183,6 +165,7 @@ class Trainer(object):
             self.log_info(
                 header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
+
         return avg_acc.avg, avg_loss.avg
 
     def test_an_epoch(self, verbose: int=0):
@@ -214,6 +197,7 @@ class Trainer(object):
             self.log_info(
                 header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
+
         return avg_acc.avg, avg_loss.avg
 
     def valid_an_epoch(self, verbose: int=0):
@@ -257,6 +241,7 @@ class Trainer(object):
         HEADER: str = 'warmup'
         self.check_df_exists(HEADER, ['acc', 'loss'])
 
+
         self.model.train()
         for idx, (train_data, train_label) in enumerate(self.train_loader):
             warm_up_lr = terminal_lr*(idx/len(self.train_loader))
@@ -288,6 +273,54 @@ class Trainer(object):
             else:
                 lr = self.optim.param_groups[0]['lr']
         self.optim = optim.SGD(self.model.parameters(), lr)
+
+
+
+class HyperTrainer(Trainer):
+    def __init__(self, valid_or_test: bool = False, *args, **kwargs):
+        super(HyperTrainer, self).__init__(*args, **kwargs)
+        self.valid_or_test = valid_or_test
+
+    def train_eval_epoches(
+        self, epoch: int, eval_every_epoch: int, trial_funct, trial):
+        """Train and test for certain epoches with an option
+        to turn on the hyper parameter tunning.
+        For trial_funct, please follow nintorch.hyper.default_trial.
+        """
+        self._check_train()
+        HEADER: str = 'train'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+        if self.valid_or_test:
+            self._check_valid()
+            HEADER_EVAL: str = 'validation'
+        else:
+            self._check_test()
+            HEADER_EVAL: str = 'test'
+        kwargs = trial_funct(trial)
+        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+
+        # TODO: cover more than lr and weight decay.
+        if 'lr' in kwargs:
+            self.optim.param_groups[0]['lr'] = kwargs['lr']
+        if 'weight_decay' in kwargs:
+            self.optim.param_groups[0]['weight_decay'] = kwargs['weight_decay']
+        if 'momentum' in kwargs:
+            self.optim.param_groups[0]['momentum'] = kwargs['momentum']
+        if len(kwargs) > 3:
+            warnings.warn('kwargs is more than 2 might not supported.', UserWarning)
+
+        for i in range(epoch):
+            train_acc, train_loss = self.train_an_epoch()
+            self.dfs_append_row(HEADER, acc=train_acc, loss=train_loss)
+            if i % eval_every_epoch == 0 and i != 0:
+                if self.valid_or_test:
+                    eval_acc, eval_loss = self.valid_an_epoch()
+                else:
+                    eval_acc, eval_loss = self.test_an_epoch()
+                self.dfs_append_row(HEADER_EVAL, acc=eval_acc, loss=eval_loss)
+                trial.report(eval_acc, i)
+            if trial.should_prune():
+                raise optuna.exception.TrialPruned()
 
 
 class HalfTrainer(Trainer):
@@ -322,7 +355,7 @@ class HalfTrainer(Trainer):
         self._half_flag = True
         self.opt_level = opt_level
     
-    def forwarding_and_updating(self, data, label) -> Tuple[str, str, str]:
+    def forwarding_and_updating(self, data, label):
         """
         """
         batch = label.data.size(0)
@@ -347,7 +380,7 @@ class HalfTrainer(Trainer):
         if lr is None:
             if self.optim is None:
                 # TODO: making my own exception?
-                raise RuntimeError(f'')
+                raise RuntimeError('')
             else:
                 lr = self.optim.param_groups[0]['lr']
  
