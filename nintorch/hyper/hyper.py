@@ -1,8 +1,9 @@
 """Collection of scripts related to hyper parameter tuning.
 """
-from 
 from typing import Callable
 import optuna
+import gc
+from .. import 
 
 
 __all__ = [
@@ -30,10 +31,13 @@ def default_trial(trial):
     return {'weight_decay': weight_decay}
 
 
-def objective(trainer, func_trial: Callable) -> float:
-    """Objective function 
-    """ 
-    func_trial 
-    return
+def objective(epoch: int, trainer, trial_func: Callable, trial) -> float:
+    """Objective function for hyper parameter training.
+    """
+    acc = trainer.train_eval_epoches(epoch, 1, 0, True, trial_func, trial)
+    # Setting for next iteration of training.
+    del trainer
+    gc.collect()
+    return acc
 
 

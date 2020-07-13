@@ -2,7 +2,7 @@
 """
 import optuna
 from nintorch import Trainer
-from funtools import defaultdict
+from functools import defaultdict
 from copy import deepcopy
 
 

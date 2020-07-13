@@ -3,15 +3,16 @@
 """Collection of wrapper for training and evaluting pytorch model.
 """
 from typing import List, Tuple
+import warnings 
 import pandas as pd
 from loguru import logger
 from apex import amp
 import numpy as np
 import torch
 import torch.optim as optim
+import optuna
 from ninstd.check import is_imported
 from .utils import AvgMeter, torch_cpu_or_gpu
-
 
 __all__ = [
     'Trainer',
@@ -355,4 +356,72 @@ class HalfTrainer(Trainer):
         if self._half_flag:
             self.model, self.optim = amp.initialize(
                 self.model, self.optim, opt_level=self.opt_level)
+
+    def train_eval_epoches(
+        self, epoch: int, eval_every_epoch: int,
+        verbose: int, return_best: bool, trial_funct, trial) -> float:
+        """Train and test for certain epoches with an option
+        to turn on the hyper parameter tunning.
+        For trial_funct, please follow nintorch.hyper.default_trial.
+        Having problem with optuna, with class.method the constructor is not
+        called for each trial of optuna. Solving by using self.init_model keep
+        for reseting the model.
+        """
+        self._check_train()
+        HEADER: str = 'Train'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+        if self.valid_or_test:
+            self._check_valid()
+            HEADER_EVAL: str = 'Validation'
+        else:
+            self._check_test()
+            HEADER_EVAL: str = 'Test'
+        kwargs = trial_funct(trial)
+        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+
+        # TODO: cover more than lr, weight decay and momentum.
+        if 'lr' in kwargs:
+            self.optim.param_groups[0]['lr'] = kwargs['lr']
+        if 'weight_decay' in kwargs:
+            self.optim.param_groups[0]['weight_decay'] = kwargs['weight_decay']
+        if 'momentum' in kwargs:
+            self.optim.param_groups[0]['momentum'] = kwargs['momentum']
+        if len(kwargs) > 3:
+            warnings.warn('kwargs is more than 3 might not supported.', UserWarning)
+
+        pbar = range(epoch)
+        if verbose > 0:
+            pbar = tqdm(pbar)
+        
+        for i in pbar:
+            train_acc, train_loss = self.train_an_epoch()
+            
+            if verbose > 0:
+                self.log_info(
+                   header=HEADER, epoch=self.epoch_idx,
+                    acc=train_acc, loss=train_loss)
+            self.dfs_append_row(HEADER, acc=train_acc, loss=train_loss)
+
+            if i % eval_every_epoch == 0 and i != 0:
+                if self.valid_or_test:
+                    eval_acc, eval_loss = self.valid_an_epoch()
+                else:
+                    eval_acc, eval_loss = self.test_an_epoch()
+
+                if verbose > 0:
+                    self.log_info(
+                       header=HEADER_EVAL, epoch=self.epoch_idx,
+                        acc=eval_acc, loss=eval_loss)
+
+                self.dfs_append_row(HEADER_EVAL, acc=eval_acc, loss=eval_loss)
+                trial.report(eval_acc, i)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+
+        if return_best:
+            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
+            return best_acc
+        else:
+            return eval_acc
+
 
