@@ -54,9 +54,13 @@ crop_filp_transforms = lambda size, pad: [
 
 
 def load_dataset(
-        num_train_batch: int, num_test_batch: int, num_extra_batch: int = 0,
-        num_worker: int = 8, dataset: str = 'mnist', 
-        roof: str = './dataset', transforms_list : list = None):
+        num_train_batch: int,
+        num_test_batch: int, 
+        num_extra_batch: int = 0,
+        num_worker: int = 8, 
+        dataset: str = 'mnist', 
+        roof: str = './dataset',
+        transforms_list : list = None) -> tuple:
     """Using torchvision to load the provided dataset online.
     Can using with predefinded transform function with the predefind mean and std. 
     Using transform_list=normalize_transforms(CIFAR10_MEAN, CIFAR10_STD)
@@ -176,13 +180,14 @@ class BaseDataset(Dataset):
         pass
     
     def denormalize(self):
+        """For reversing the normalization of image back to [0, 255] pixel intensity. 
+        Designed for visuaization or show the image.
+        """
         pass
     
     def plot_examples(self):
         pass
     
-    
-
 
 class CsvDataset(BaseDataset):
     def __init__(self, csv_file: str, *args, **kwargs):

@@ -1,5 +1,5 @@
-#
-#
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 """
 import os
@@ -14,4 +14,3 @@ def test_init_logger():
     assert os.path.isfile('test.log')
     if os.path.isfile('test.log'):
         os.remove('test.log')
-

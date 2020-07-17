@@ -7,16 +7,13 @@ import random
 from loguru import logger
 import torch
 import numpy as np
-from knockknock import email_sender 
 
 __all__ = [
     'seed_torch',
     'torch_cpu_or_gpu',
     'get_lr_from_optim',
     'AvgMeter',
-    'init_logger',
-    'notify_email'
-]
+    'init_logger']
 
 
 def seed_torch(seed: int = 0, backend: bool = True):

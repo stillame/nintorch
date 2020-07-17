@@ -2,45 +2,62 @@
 # -*- coding: utf-8 -*-
 """Collection of wrapper for training and evaluting pytorch model.
 """
-from typing import List, Tuple
 import warnings 
-import pandas as pd
-from loguru import logger
+from typing import List, Tuple, Callable
+
+import optuna
+from tqdm import tqdm
 from apex import amp
 import numpy as np
 import torch
 import torch.optim as optim
-import optuna
+import pandas as pd
+from loguru import logger
+from sklearn.metrics import confusion_matrix
+
 from ninstd.check import is_imported
 from .utils import AvgMeter, torch_cpu_or_gpu
 
 __all__ = [
     'Trainer',
-    'HalfTrainer'
+    'HyperTrainer',
+    'HalfTrainer',
 ]
 
 
 class Trainer(object):
-    """Class responsed for training and testing.
+    """Class responsed for training and evaluating.
+    verbose within this class, 0 for nothing, 1 for logging and 2 for progress bar.
     """
     def __init__(
             self, model=None, optim=None, loss_func=None,
             train_loader=None, valid_loader=None,
             test_loader=None, scheduler=None, writer=None,
-            *args, **kwargs):
-
-        self.model = model
+            *args, **kwargs) -> None:
+        
         self.optim = optim
         self.loss_func = loss_func
-        self.train_loader = train_loader
-        self.valid_loader = valid_loader
-        self.test_loader = test_loader
-
+        self.loaders: dict = {
+            'train': train_loader, 
+            'valid': valid_loader,
+            'test': test_loader}
         self.scheduler = scheduler
         self.writer = writer
         self.device = torch_cpu_or_gpu()
-        self.epoch_idx = 0
-        self.dfs = {}
+        self.model = model.to(self.device)
+        self.epoch_idx: int = 0
+        self.dfs: dict = {}
+
+    def _check_train(self) -> None:
+        assert self.loaders['train'] is not None
+        assert self.model is not None
+        assert self.optim is not None
+        assert self.loss_func is not None
+
+    def _check_eval(self) -> None:
+        assert self.loaders['test'] is not None or self.loaders['valid'] is not None  
+        assert self.model is not None
+        assert self.loss_func is not None
 
     @staticmethod
     def gen_empty_df(cols: List[str]) -> pd.DataFrame:
@@ -72,7 +89,7 @@ class Trainer(object):
         df = pd.DataFrame(wrapped_kwargs)
         self.dfs[name_df] = self.dfs[name_df].append(df)
 
-    def check_df_exists(self, name_df: str, cols: List[str]) -> None:
+    def check_df_exists(self, name_df: str, cols: List[str]) -> bool:
         """Check is name_df is in the dfs or not.
         If it is not exist, generate new df in self.dfs.
         Else replace the variable in self.dfs to empty df.
@@ -81,22 +98,14 @@ class Trainer(object):
         if name_df not in self.dfs.keys():
             df = self.gen_empty_df(cols)
             self.dfs.update({name_df: df})
-
-    def _check_train(self) -> None:
-        assert self.train_loader is not None
-        assert self.model is not None
-        assert self.optim is not None
-        assert self.loss_func is not None
-
-    def _check_valid(self) -> None:
-        assert self.valid_loader is not None
-        assert self.model is not None
-        assert self.loss_func is not None
-
-    def _check_test(self) -> None:
-        assert self.test_loader is not None
-        assert self.model is not None
-        assert self.loss_func is not None
+            return False
+        else:
+            # Detect df with same name_df, adding `1` into name_df.
+            # Note that: same and same name_df should be `11`.
+            df = self.gen_empty_df(cols)
+            name_df += '1'
+            self.dfs.update({name_df: df})
+            return True
 
     def log_info(
             self, header: str, epoch: int, acc: float, loss: float):
@@ -129,12 +138,22 @@ class Trainer(object):
         assert self.writer is not None
         self.writer.add_scalars(
             group_name, updating_dict, global_step=idx)
-        
-    def forwarding(self, data, label):
+ 
+    def predicting(self, data):
+        """Predict data given string of name_loader.
+        """
+        assert self.model is not None
+        with torch.no_grad():
+            data = data.to(self.device)
+            pred = self.model.forward(data)
+        return pred
+
+    def forwarding(self, data, label=None):
         """For forwarding a model.
         Need to using with the with torch.no_grad() in case evalutation.
+        Designed to use for both training and evaluating.
         """
-        batch = label.data.size(0)
+        batch = data.data.size(0)
         data, label = data.to(self.device), label.to(self.device)
         pred = self.model.forward(data)
         loss = self.loss_func(pred, label)
@@ -147,26 +166,26 @@ class Trainer(object):
         Adding necessary function for back-propagation.
         """
         self.optim.zero_grad()
+        # Reusing from the self.forwarding.
         correct, loss, batch = self.forwarding(data, label)
         loss.backward()
         self.optim.step()
         return correct, loss, batch
 
-    def train_an_epoch(self, verbose: int=0):
+    def train_an_epoch(self, verbose: int = 1):
         self._check_train()
-        HEADER: str = 'training'
+        HEADER: str = 'train'
         self.epoch_idx += 1
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
         self.check_df_exists(HEADER, ['acc', 'loss'])
-
+        
         self.model.train()
-        for train_data, train_label in self.train_loader:
+        for train_data, train_label in self.loaders[HEADER]:
             correct, loss, batch = self.forwarding_and_updating(
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-
         self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
@@ -176,78 +195,50 @@ class Trainer(object):
             self.add_scalars(
                 group_name=HEADER,
                 updating_dict={
-                    'train_acc': avg_acc.avg,
-                    'train_loss': avg_loss.avg},
+                    'acc': avg_acc.avg,
+                    'loss': avg_loss.avg},
                 idx=self.epoch_idx)
 
-        if verbose > 0:
+        if verbose == 1:
             self.log_info(
                 header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
 
-    def test_an_epoch(self, verbose: int=0):
-        self._check_test()
+    def eval_an_epoch(self, name_loader: str, verbose: int = 0):
+        """For validation or testing, designed for none-gradient processing.
+        """
+        self._check_eval()
+        assert isinstance(name_loader, str)
+        assert name_loader in ['valid', 'test']
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        HEADER: str = 'testing'
+        HEADER: str = 'eval'
         self.check_df_exists(HEADER, ['acc', 'loss'])
-
+        
         self.model.eval()
         with torch.no_grad():
-            for test_data, test_label in self.test_loader:
-                correct, loss, batch = self.forwarding(
-                    test_data, test_label)
+            for data, label in self.loaders[name_loader]:
+                correct, loss, batch = self.forwarding(data, label)
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
-
         self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
         
         if self.writer is not None:
             self.add_scalars(
                 group_name=HEADER,
                 updating_dict={
-                    'test_acc': avg_acc.avg,
-                    'test_loss': avg_loss.avg},
+                    'acc': avg_acc.avg,
+                    'loss': avg_loss.avg},
                 idx=self.epoch_idx)
 
-        if verbose > 0:
+        if verbose == 1:
             self.log_info(
                 header=HEADER, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
-
-    def valid_an_epoch(self, verbose: int=0):
-        self._check_valid()
-        avg_acc = AvgMeter()
-        avg_loss = AvgMeter()
-        HEADER: str = 'validation'
-        self.check_df_exists(HEADER, ['acc', 'loss'])
-
-        self.model.eval()
-        with torch.no_grad():
-            for valid_data, valid_label in self.valid_loader:
-                correct, loss, batch = self.forwarding(
-                    valid_data, valid_label)
-                avg_acc(correct, batch)
-                avg_loss(loss.item(), batch)
-
-        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
-
-        if self.writer is not None:
-            self.add_scalars(
-                group_name=HEADER,
-                updating_dict={'valid_acc': avg_acc.avg, 'valid_loss': avg_loss.avg},
-                idx=self.epoch_idx)
-
-        if verbose > 0:
-            self.log_info(
-                header=HEADER, epoch=self.epoch_idx,
-                acc=avg_acc.avg, loss=avg_loss.avg)
-
-        return avg_acc.avg, avg_loss.avg
-
-    def warm_up_lr(self, terminal_lr: float, verbose: int = 0):
+    
+    def warm_up_lr(self, terminal_lr: float, verbose: int = 1):
         """Fix as the wrapper of the train_an_epoch.
         Using warm up learning from:
             https://stackoverflow.com/questions/55933867/what-does-learning-rate-warm-up-mean
@@ -255,29 +246,83 @@ class Trainer(object):
         self._check_train()
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
+        # This is the special case of HEADER and NAME_LOADER, please not follow this.
         HEADER: str = 'warmup'
-        self.check_df_exists(HEADER, ['acc', 'loss'])
-
+        NAME_LOADER: str = 'train'
+        self.check_df_exists(NAME_LOADER, ['acc', 'loss'])
+        self.epoch_idx += 1
+        
         self.model.train()
-        for idx, (train_data, train_label) in enumerate(self.train_loader):
-            warm_up_lr = terminal_lr*(idx/len(self.train_loader))
+        for idx, (train_data, train_label) in enumerate(self.loaders[NAME_LOADER]):
+            warm_up_lr = terminal_lr*(idx/len(self.loaders[NAME_LOADER]))
             self.optim.param_groups[0]['lr'] = warm_up_lr
             correct, loss, batch = self.forwarding_and_updating(
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-       
-        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
+        self.dfs_append_row(NAME_LOADER, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
             self.scheduler.step()
 
-        if verbose > 0:
+        if verbose == 1:
             self.log_info(
                header=HEADER, epoch=self.epoch_idx,
-                acc=avg_acc.avg, loss=avg_loss.avg)
-
+               acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
+
+    @staticmethod
+    def batch2dataset(batches: list) -> np.ndarray:
+        """ Converting list of batches to dataset.
+        """
+        if hasattr(batches[0], 'cpu'):
+            batches = [batch.cpu() for batch in batches]
+        np_batches = [batch.numpy() for batch in batches]
+        np_dataset = np.concatenate(np_batches)
+        return np_dataset
+
+    def predicting_an_epoch(self, name_loader: str) -> np.ndarray:
+        """Predicting or validation or testing without labels.
+        Therefore, no loss and metrics.
+        """
+        self._check_eval()
+        assert isinstance(name_loader, str)
+        assert name_loader in ['valid', 'test']
+        HEADER: str = 'predict'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+        self.model.eval()
+
+        list_pred: list = []
+        with torch.no_grad():
+            for data in self.loaders[name_loader]:
+                if type(data) == list:
+                    # More than one data with label or mask?
+                    # Should be torch.Tensor in case data only.
+                    data = data[0]
+                pred = self.predicting(data)
+                list_pred.append(pred)
+        dataset_pred = self.batch2dataset(list_pred)
+        dataset_pred = np.argmax(dataset_pred, axis=1)
+        return dataset_pred
+    
+    def confusion_mat(self, name_loader: str, order: int, save: bool):
+        """ Confusion matrix.
+        """
+        pred = self.predicting_an_epoch(name_loader)
+        true = self.get_label_dataset(name_loader, order)
+        # TODO: adding seaborn saving confusion matrix.
+        return confusion_matrix(true, pred)
+    
+    def get_label_dataset(self, name_loader: str, order: int = 1) -> np.ndarray:
+        """Get labels from loaders given the name_loader and order within the output of loader. 
+        """
+        list_data: list = []
+        for data in self.loaders[name_loader]:
+            if type(data) == list:
+                data = data[order]
+            list_data.append(data)
+        dataset_label = self.batch2dataset(list_data)
+        return dataset_label
 
     def swap_to_sgd(self, lr: float = None) -> None:
         """Swap into SGD with provided value.
@@ -289,6 +334,124 @@ class Trainer(object):
             else:
                 lr = self.optim.param_groups[0]['lr']
         self.optim = optim.SGD(self.model.parameters(), lr)
+        
+    def train_eval_epoches(
+        self, epoch: int, 
+        eval_every_epoch: int,
+        name_loader: str,
+        return_best: bool,
+        verbose: int = 1) -> float:
+        self._check_train()
+        self._check_eval()
+        assert isinstance(epoch, int)
+        assert isinstance(eval_every_epoch, int)
+        assert isinstance(name_loader, str)
+        assert isinstance(return_best, bool)
+        assert epoch >= eval_every_epoch
+        
+        HEADER: str = 'train'
+        HEADER_EVAL: str = 'eval'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+        pbar = range(1, epoch + 1)
+        if verbose == 2:
+            pbar = tqdm(pbar)
+        for i in pbar:
+            train_acc, train_loss = self.train_an_epoch(verbose=verbose)
+            if i % eval_every_epoch == 0 and i != 0:
+                eval_acc, eval_loss = self.eval_an_epoch(
+                    name_loader, verbose=verbose)
+                if verbose == 2:
+                    pbar.set_description(
+                        f'train acc: {train_acc}, eval acc: {eval_acc}')
+        if return_best:
+            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
+            return best_acc
+        else:
+            return eval_acc
+
+
+class HyperTrainer(Trainer):
+    """ To make this run-able with trainer. 
+    The model and optim are required to be reconstructed every tunning round.
+    Therefore instead of receive the instances, need to receive callable and input.
+    To construct within this module instead.
+    """
+    def __init__(
+            self,
+            model_kwargs: dict, 
+            optim_kwargs: dict,
+            *args, **kwargs):
+        super(HyperTrainer, self).__init__(*args, **kwargs)
+        # Get the type of model and optim.
+        self.model_type = type(kwargs['model'])
+        self.model_kwargs = model_kwargs
+        self.optim_type = type(kwargs['optim'])
+        self.optim_kwargs = optim_kwargs
+        
+    def hyper_init(self):
+        """Recreate the model and optim in every trial.
+        """
+        self.model = self.model_type(**self.model_kwargs)
+        self.optim_kwargs['params'] = self.model.parameters()
+        self.optim = self.optim_type(**self.optim_kwargs)
+        self.model.to(self.device)
+        
+    def train_eval_epoches(
+        self, epoch: int,
+        eval_every_epoch: int,
+        name_loader: str,
+        trial_func: Callable, 
+        trial,
+        return_best: bool = True, 
+        verbose: int = 1) -> float:
+        """Train and eval designed for optuna hyper parameter seaching.
+        """
+        self._check_train()
+        self._check_eval()
+        assert isinstance(epoch, int)
+        assert isinstance(eval_every_epoch, int)
+        assert isinstance(name_loader, str)
+        assert isinstance(return_best, bool)
+        assert epoch >= eval_every_epoch
+        
+        HEADER: str = 'train'
+        HEADER_EVAL: str = 'eval'
+        self.check_df_exists(HEADER, ['acc', 'loss'])
+        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+        self.hyper_init()
+
+        hyper_kwargs = trial_func(trial)
+        # TODO: cover more than lr, weight decay and momentum.
+        if 'lr' in hyper_kwargs:
+            self.optim.param_groups[0]['lr'] = hyper_kwargs['lr']
+        if 'weight_decay' in hyper_kwargs:
+            self.optim.param_groups[0]['weight_decay'] = hyper_kwargs['weight_decay']
+        if 'momentum' in hyper_kwargs:
+            self.optim.param_groups[0]['momentum'] = hyper_kwargs['momentum']
+        if len(hyper_kwargs) > 3:
+            warnings.warn('kwargs is more than 3 might not supported.', UserWarning)
+
+        pbar = range(1, epoch + 1)
+        if verbose == 2:
+            pbar = tqdm(pbar)
+        for i in pbar:
+            train_acc, train_loss = self.train_an_epoch(verbose=verbose)
+            if i % eval_every_epoch == 0 and i != 0:
+                eval_acc, eval_loss = self.eval_an_epoch(
+                    name_loader, verbose=verbose)
+                if verbose == 2:
+                    pbar.set_description(
+                        f'train acc: {train_acc}, eval acc: {eval_acc}')
+                trial.report(eval_acc, i)
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+
+        if return_best:
+            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
+            return best_acc
+        else:
+            return eval_acc
 
 
 class HalfTrainer(Trainer):
@@ -309,7 +472,7 @@ class HalfTrainer(Trainer):
         """To half precision using Apex module.
         More details: https://nvidia.github.io/apex/amp.html
         TODO: checking with regularly trained model which one is faster.
-        TODO: gradient overflow problem very 2 epoches.
+        TODO: Checking why warnning the gradient overflow problem very 2 epoches.
         """
         assert isinstance(opt_level, str)
         assert isinstance(verbose, int)
@@ -356,72 +519,3 @@ class HalfTrainer(Trainer):
         if self._half_flag:
             self.model, self.optim = amp.initialize(
                 self.model, self.optim, opt_level=self.opt_level)
-
-    def train_eval_epoches(
-        self, epoch: int, eval_every_epoch: int,
-        verbose: int, return_best: bool, trial_funct, trial) -> float:
-        """Train and test for certain epoches with an option
-        to turn on the hyper parameter tunning.
-        For trial_funct, please follow nintorch.hyper.default_trial.
-        Having problem with optuna, with class.method the constructor is not
-        called for each trial of optuna. Solving by using self.init_model keep
-        for reseting the model.
-        """
-        self._check_train()
-        HEADER: str = 'Train'
-        self.check_df_exists(HEADER, ['acc', 'loss'])
-        if self.valid_or_test:
-            self._check_valid()
-            HEADER_EVAL: str = 'Validation'
-        else:
-            self._check_test()
-            HEADER_EVAL: str = 'Test'
-        kwargs = trial_funct(trial)
-        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
-
-        # TODO: cover more than lr, weight decay and momentum.
-        if 'lr' in kwargs:
-            self.optim.param_groups[0]['lr'] = kwargs['lr']
-        if 'weight_decay' in kwargs:
-            self.optim.param_groups[0]['weight_decay'] = kwargs['weight_decay']
-        if 'momentum' in kwargs:
-            self.optim.param_groups[0]['momentum'] = kwargs['momentum']
-        if len(kwargs) > 3:
-            warnings.warn('kwargs is more than 3 might not supported.', UserWarning)
-
-        pbar = range(epoch)
-        if verbose > 0:
-            pbar = tqdm(pbar)
-        
-        for i in pbar:
-            train_acc, train_loss = self.train_an_epoch()
-            
-            if verbose > 0:
-                self.log_info(
-                   header=HEADER, epoch=self.epoch_idx,
-                    acc=train_acc, loss=train_loss)
-            self.dfs_append_row(HEADER, acc=train_acc, loss=train_loss)
-
-            if i % eval_every_epoch == 0 and i != 0:
-                if self.valid_or_test:
-                    eval_acc, eval_loss = self.valid_an_epoch()
-                else:
-                    eval_acc, eval_loss = self.test_an_epoch()
-
-                if verbose > 0:
-                    self.log_info(
-                       header=HEADER_EVAL, epoch=self.epoch_idx,
-                        acc=eval_acc, loss=eval_loss)
-
-                self.dfs_append_row(HEADER_EVAL, acc=eval_acc, loss=eval_loss)
-                trial.report(eval_acc, i)
-            if trial.should_prune():
-                raise optuna.exceptions.TrialPruned()
-
-        if return_best:
-            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
-            return best_acc
-        else:
-            return eval_acc
-
-
