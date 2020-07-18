@@ -424,9 +424,8 @@ class HyperTrainer(Trainer):
         assert epoch >= eval_every_epoch
         
         HEADER: str = 'train'
-        HEADER_EVAL: str = 'eval'
         self.check_df_exists(HEADER, ['acc', 'loss'])
-        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+        self.check_df_exists(name_loader, ['acc', 'loss'])
         self.hyper_init()
 
         hyper_kwargs = trial_func(trial)
@@ -456,7 +455,7 @@ class HyperTrainer(Trainer):
                     raise optuna.exceptions.TrialPruned()
 
         if return_best:
-            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
+            best_acc = self.get_best(name_loader, 'acc', 'max')
             return best_acc
         else:
             return eval_acc
