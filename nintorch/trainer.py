@@ -97,7 +97,7 @@ class Trainer(object):
         Append a row from the dict kwargs to that df.
         """
         keys = list(kwargs)
-        if hasattr(kwargs[0], 'numpy'):
+        if hasattr(kwargs[keys[0]], 'numpy'):
             # Checking first variable is torch.Tensor or not.
             wrapped_kwargs = {key: [kwargs[key].numpy()] for key in keys}
         else:
