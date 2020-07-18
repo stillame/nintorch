@@ -93,7 +93,7 @@ class TestTrainer(object):
         trainer = HyperTrainer(**kwargs)
         wrapped_obj = lambda trial: default_objective(
             3, trainer, default_trial, trial)
-        study = start_tuning(wrapped_obj, 'maximize', 10)                
+        study = start_tuning(wrapped_obj, 'maximize', 5)                
         best_acc = study.best_trial.value
         assert best_acc > THRESHOLD
 

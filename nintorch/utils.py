@@ -58,14 +58,17 @@ class AvgMeter(object):
     def __init__(self):
         self.sum = 0.0
         self.num = 0
+        self.idx = 0
 
     def update(self, val: int, batch_size: int):
         self.sum += val
         self.num += batch_size
+        self.idx += 1
 
     def clear(self):
         self.sum = 0.0
         self.num = 0
+        self.idx = 0
 
     @property
     def avg(self):
@@ -74,6 +77,10 @@ class AvgMeter(object):
     def __call__(self, val: int, batch_size: int):
         self.update(val, batch_size)
 
+    def __repr__(self) -> str:
+        return (f'Accumuation: {self.sum},' 
+                f'with number of elements {self.num},'
+                f'with {self.idx} times.')
 
 def init_logger(name_log: str = __file__, rm_exist: bool = False):
     """Setting logger with my basic setting.
