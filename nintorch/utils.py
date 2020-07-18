@@ -79,8 +79,8 @@ class AvgMeter(object):
 
     def __repr__(self) -> str:
         return (f'Accumuation: {self.sum},' 
-                f'with number of elements {self.num},'
-                f'with {self.idx} times.')
+                f' with number of elements {self.num},'
+                f' for {self.idx} times.')
 
 def init_logger(name_log: str = __file__, rm_exist: bool = False):
     """Setting logger with my basic setting.
