@@ -359,9 +359,8 @@ class Trainer(object):
         assert epoch >= eval_every_epoch
         
         HEADER: str = 'train'
-        HEADER_EVAL: str = 'eval'
         self.check_df_exists(HEADER, ['acc', 'loss'])
-        self.check_df_exists(HEADER_EVAL, ['acc', 'loss'])
+        self.check_df_exists(name_loader, ['acc', 'loss'])
         pbar = range(1, epoch + 1)
         if verbose == 2:
             pbar = tqdm(pbar)
@@ -374,7 +373,7 @@ class Trainer(object):
                     pbar.set_description(
                         f'train acc: {train_acc}, eval acc: {eval_acc}')
         if return_best:
-            best_acc = self.get_best(HEADER_EVAL, 'acc', 'max')
+            best_acc = self.get_best(name_loader, 'acc', 'max')
             return best_acc
         else:
             return eval_acc
