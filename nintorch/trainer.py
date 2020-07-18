@@ -37,7 +37,8 @@ class Trainer(object):
             valid_loader=None,
             test_loader=None, 
             scheduler=None, 
-            writer=None) -> None:
+            writer=None,
+            *args, **kwargs) -> None:
         
         self.optim = optim
         self.loss_func = loss_func
