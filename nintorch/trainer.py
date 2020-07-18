@@ -27,12 +27,17 @@ __all__ = [
 
 class Trainer(object):
     """Class responsed for training and evaluating.
-    verbose within this class, 0 for nothing, 1 for logging and 2 for progress bar.
+    verbose: 0 for nothing, 1 for logging and 2 for progress bar.
     """
     def __init__(
-            self, model=None, optim=None, loss_func=None,
-            train_loader=None, valid_loader=None,
-            test_loader=None, scheduler=None, writer=None,
+            self, model=None, 
+            optim=None, 
+            loss_func=None,
+            train_loader=None, 
+            valid_loader=None,
+            test_loader=None, 
+            scheduler=None, 
+            writer=None,
             *args, **kwargs) -> None:
         
         self.optim = optim
@@ -47,6 +52,7 @@ class Trainer(object):
         self.model = model.to(self.device)
         self.epoch_idx: int = 0
         self.dfs: dict = {}
+        self.best_acc: float = 0.0
 
     def _check_train(self) -> None:
         assert self.loaders['train'] is not None
@@ -65,6 +71,13 @@ class Trainer(object):
         """
         df = pd.DataFrame(columns=cols)
         return df
+    
+    # TODO: arbitary supporting other name of loaders.
+    # def add_loader(self, name_loader: str, loader) -> None:
+    #     """Adding loader to self.loaders.
+    #     """
+    #     assert isinstance(name_loader, str)
+    #     self.loaders.update({name_loader: loader})
 
     def get_best(self, name_df: str, col: str, direction: str = 'max') -> float:
         """Return the best value in either `max` or `min` direction from self.dfs.
@@ -89,23 +102,14 @@ class Trainer(object):
         df = pd.DataFrame(wrapped_kwargs)
         self.dfs[name_df] = self.dfs[name_df].append(df)
 
-    def check_df_exists(self, name_df: str, cols: List[str]) -> bool:
+    def check_df_exists(self, name_df: str, cols: List[str]) -> None:
         """Check is name_df is in the dfs or not.
         If it is not exist, generate new df in self.dfs.
-        Else replace the variable in self.dfs to empty df.
         """
         assert isinstance(name_df, str)
         if name_df not in self.dfs.keys():
             df = self.gen_empty_df(cols)
             self.dfs.update({name_df: df})
-            return False
-        else:
-            # Detect df with same name_df, adding `1` into name_df.
-            # Note that: same and same name_df should be `11`.
-            df = self.gen_empty_df(cols)
-            name_df += '1'
-            self.dfs.update({name_df: df})
-            return True
 
     def log_info(
             self, header: str, epoch: int, acc: float, loss: float):
@@ -172,28 +176,28 @@ class Trainer(object):
         self.optim.step()
         return correct, loss, batch
 
-    def train_an_epoch(self, verbose: int = 1):
+    def train_an_epoch(self, header: str = 'train', verbose: int = 1):
         self._check_train()
-        HEADER: str = 'train'
         self.epoch_idx += 1
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        self.check_df_exists(HEADER, ['acc', 'loss'])
+        self.check_df_exists(header, ['acc', 'loss'])
         
         self.model.train()
-        for train_data, train_label in self.loaders[HEADER]:
+        for train_data, train_label in self.loaders[header]:
             correct, loss, batch = self.forwarding_and_updating(
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
+        self.dfs_append_row(
+            header, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
             self.scheduler.step()
 
         if self.writer is not None:
             self.add_scalars(
-                group_name=HEADER,
+                group_name=header,
                 updating_dict={
                     'acc': avg_acc.avg,
                     'loss': avg_loss.avg},
@@ -201,32 +205,31 @@ class Trainer(object):
 
         if verbose == 1:
             self.log_info(
-                header=HEADER, epoch=self.epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
 
-    def eval_an_epoch(self, name_loader: str, verbose: int = 0):
+    def eval_an_epoch(self, header: str = 'test', verbose: int = 0):
         """For validation or testing, designed for none-gradient processing.
         """
         self._check_eval()
-        assert isinstance(name_loader, str)
-        assert name_loader in ['valid', 'test']
+        assert isinstance(header, str)
+        assert header in ['valid', 'test']
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
-        HEADER: str = 'eval'
-        self.check_df_exists(HEADER, ['acc', 'loss'])
+        self.check_df_exists(header, ['acc', 'loss'])
         
         self.model.eval()
         with torch.no_grad():
-            for data, label in self.loaders[name_loader]:
+            for data, label in self.loaders[header]:
                 correct, loss, batch = self.forwarding(data, label)
                 avg_acc(correct, batch)
                 avg_loss(loss.item(), batch)
-        self.dfs_append_row(HEADER, acc=avg_acc.avg, loss=avg_loss.avg)
+        self.dfs_append_row(header, acc=avg_acc.avg, loss=avg_loss.avg)
         
         if self.writer is not None:
             self.add_scalars(
-                group_name=HEADER,
+                group_name=header,
                 updating_dict={
                     'acc': avg_acc.avg,
                     'loss': avg_loss.avg},
@@ -234,40 +237,40 @@ class Trainer(object):
 
         if verbose == 1:
             self.log_info(
-                header=HEADER, epoch=self.epoch_idx,
+                header=header, epoch=self.epoch_idx,
                 acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
     
-    def warm_up_lr(self, terminal_lr: float, verbose: int = 1):
+    def warm_up_lr(self, terminal_lr: float, header: str = 'train', verbose: int = 1):
         """Fix as the wrapper of the train_an_epoch.
         Using warm up learning from:
             https://stackoverflow.com/questions/55933867/what-does-learning-rate-warm-up-mean
         """
         self._check_train()
+        assert isinstance(terminal_lr, float)
+        assert isinstance(header, str)
         avg_acc = AvgMeter()
         avg_loss = AvgMeter()
         # This is the special case of HEADER and NAME_LOADER, please not follow this.
-        HEADER: str = 'warmup'
-        NAME_LOADER: str = 'train'
-        self.check_df_exists(NAME_LOADER, ['acc', 'loss'])
+        self.check_df_exists(header, ['acc', 'loss'])
         self.epoch_idx += 1
         
         self.model.train()
-        for idx, (train_data, train_label) in enumerate(self.loaders[NAME_LOADER]):
-            warm_up_lr = terminal_lr*(idx/len(self.loaders[NAME_LOADER]))
+        for idx, (train_data, train_label) in enumerate(self.loaders[header]):
+            warm_up_lr = terminal_lr*(idx/len(self.loaders[header]))
             self.optim.param_groups[0]['lr'] = warm_up_lr
             correct, loss, batch = self.forwarding_and_updating(
                 train_data, train_label)
             avg_acc(correct, batch)
             avg_loss(loss.item(), batch)
-        self.dfs_append_row(NAME_LOADER, acc=avg_acc.avg, loss=avg_loss.avg)
+        self.dfs_append_row(header, acc=avg_acc.avg, loss=avg_loss.avg)
 
         if self.scheduler is not None:
             self.scheduler.step()
 
         if verbose == 1:
             self.log_info(
-               header=HEADER, epoch=self.epoch_idx,
+               header=header, epoch=self.epoch_idx,
                acc=avg_acc.avg, loss=avg_loss.avg)
         return avg_acc.avg, avg_loss.avg
 
@@ -276,8 +279,10 @@ class Trainer(object):
         """ Converting list of batches to dataset.
         """
         if hasattr(batches[0], 'cpu'):
+            # Converting from cuda to cpu.
             batches = [batch.cpu() for batch in batches]
         np_batches = [batch.numpy() for batch in batches]
+        # [[], [], ...] -> []
         np_dataset = np.concatenate(np_batches)
         return np_dataset
 
@@ -459,7 +464,6 @@ class HalfTrainer(Trainer):
     """
     def __init__(self, *args, **kwargs):
         super(HalfTrainer, self).__init__(*args, **kwargs)
-        self._half_flag = False
         self.opt_level = None
         
     def _check_half(self):
@@ -468,7 +472,7 @@ class HalfTrainer(Trainer):
         assert self.loss_func is not None
         assert is_imported('apex.amp')
     
-    def to_half(self, opt_level: str = 'O1', verbose: int = 1):
+    def to_half(self, opt_level: str = 'O1', verbose: int = 1) -> None:
         """To half precision using Apex module.
         More details: https://nvidia.github.io/apex/amp.html
         TODO: checking with regularly trained model which one is faster.
@@ -480,12 +484,13 @@ class HalfTrainer(Trainer):
         self._check_half()
         self.model, self.optim = amp.initialize(
             self.model, self.optim, opt_level=opt_level, verbosity=verbose)
-        if self.scheduler is not None:
-            self.scheduler.optimizer = self.optim
-        # Setting for detect the half precision during training, testing or saving.
-        self._half_flag = True
+
+        # Checking that this is necessary or not.
+        #if self.scheduler is not None:
+        #     self.scheduler.optimizer = self.optim
         self.opt_level = opt_level
-    
+        
+
     def forwarding_and_updating(self, data, label) -> Tuple[str, str, str]:
         """
         """
@@ -493,13 +498,9 @@ class HalfTrainer(Trainer):
         data, label = data.to(self.device), label.to(self.device)
         self.optim.zero_grad()
         pred = self.model.forward(data)
-        if not self._half_flag:
-            loss = self.loss_func(pred, label)
-            loss.backward()
-        else:
-            loss = self.loss_func(pred, label)
-            with amp.scale_loss(loss, self.optim) as scaled_loss:
-                scaled_loss.backward()
+        loss = self.loss_func(pred, label)
+        with amp.scale_loss(loss, self.optim) as scaled_loss:
+            scaled_loss.backward()
         _, max_pred = torch.max(pred.data, 1)
         correct = (max_pred == label).sum().item()
         self.optim.step()
@@ -516,6 +517,5 @@ class HalfTrainer(Trainer):
                 lr = self.optim.param_groups[0]['lr']
  
         self.optim = optim.SGD(self.model.parameters(), lr)
-        if self._half_flag:
-            self.model, self.optim = amp.initialize(
-                self.model, self.optim, opt_level=self.opt_level)
+        self.model, self.optim = amp.initialize(
+            self.model, self.optim, opt_level=self.opt_level)
