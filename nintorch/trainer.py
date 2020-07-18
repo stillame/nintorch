@@ -37,8 +37,7 @@ class Trainer(object):
             valid_loader=None,
             test_loader=None, 
             scheduler=None, 
-            writer=None,
-            *args, **kwargs) -> None:
+            writer=None) -> None:
         
         self.optim = optim
         self.loss_func = loss_func
@@ -98,7 +97,11 @@ class Trainer(object):
         Append a row from the dict kwargs to that df.
         """
         keys = list(kwargs)
-        wrapped_kwargs = {key: [kwargs[key]] for key in keys}
+        if hasattr(kwargs[0], 'numpy'):
+            # Checking first variable is torch.Tensor or not.
+            wrapped_kwargs = {key: [kwargs[key].numpy()] for key in keys}
+        else:
+            wrapped_kwargs = {key: [kwargs[key]] for key in keys}
         df = pd.DataFrame(wrapped_kwargs)
         self.dfs[name_df] = self.dfs[name_df].append(df)
 
@@ -472,7 +475,7 @@ class HalfTrainer(Trainer):
         assert self.loss_func is not None
         assert is_imported('apex.amp')
     
-    def to_half(self, opt_level: str = 'O1', verbose: int = 1) -> None:
+    def to_half(self, opt_level: str = 'O1', verbose: int = 0) -> None:
         """To half precision using Apex module.
         More details: https://nvidia.github.io/apex/amp.html
         TODO: checking with regularly trained model which one is faster.
