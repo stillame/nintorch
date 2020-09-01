@@ -1,4 +1,4 @@
-# !/usr/bin/env python3
+ # !/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Collection of wrapper for training and evaluting pytorch model.
 """
@@ -28,18 +28,21 @@ __all__ = [
 class Trainer(object):
     """Class responsed for training and evaluating.
     verbose: 0 for nothing, 1 for logging and 2 for progress bar.
+    TODO: not automatically create df from training evaluating. Self create, let the user defines.
     """
     def __init__(
-            self, model=None, 
-            optim=None, 
+            self,
+            model=None,
+            optim=None,
             loss_func=None,
-            train_loader=None, 
+            train_loader=None,
             valid_loader=None,
-            test_loader=None, 
-            scheduler=None, 
+            test_loader=None,
+            scheduler=None,
             writer=None,
-            *args, **kwargs) -> None:
-        
+            *args,
+            **kwargs) -> None:
+
         self.optim = optim
         self.loss_func = loss_func
         self.loaders: dict = {
@@ -85,13 +88,16 @@ class Trainer(object):
         assert isinstance(name_df, str)
         assert isinstance(col, str)
         assert isinstance(direction, str)
-        if direction.lower() == 'max':
+        
+        print(self.dfs)
+        
+        if direction.lower() == 'max' or direction.lower() == 'maximum':
             return np.amax(self.dfs[name_df][col])
-        elif direction.lower() == 'min':
+        elif direction.lower() == 'min' or direction.lower() == 'minimum':
             return np.amin(self.dfs[name_df][col])
         else:
-            raise NotImplementedError(
-                f'Direction: {direction} is not `max` or `min`.')
+            raise ValueError(
+                f'Direction: {direction} is not `max`, `minimum`, `minimum` or `min`.')
 
     def dfs_append_row(self, name_df: str, **kwargs) -> None:
         """Given name_df or key of dfs, access df within dfs.
@@ -105,6 +111,7 @@ class Trainer(object):
             wrapped_kwargs = {key: [kwargs[key]] for key in keys}
         df = pd.DataFrame(wrapped_kwargs)
         self.dfs[name_df] = self.dfs[name_df].append(df)
+        # TODO: Adding resetting the index!
 
     def check_df_exists(self, name_df: str, cols: List[str]) -> None:
         """Check is name_df is in the dfs or not.
@@ -314,7 +321,8 @@ class Trainer(object):
         dataset_pred = np.argmax(dataset_pred, axis=1)
         return dataset_pred
     
-    def confusion_mat(self, name_loader: str, order: int, save: bool):
+    def confusion_mat(
+            self, name_loader: str, order: int, save: bool):
         """ Confusion matrix.
         """
         pred = self.predicting_an_epoch(name_loader)
@@ -322,7 +330,8 @@ class Trainer(object):
         # TODO: adding seaborn saving confusion matrix.
         return confusion_matrix(true, pred)
     
-    def get_label_dataset(self, name_loader: str, order: int = 1) -> np.ndarray:
+    def get_label_dataset(
+            self, name_loader: str, order: int = 1) -> np.ndarray:
         """Get labels from loaders given the name_loader and order within the output of loader. 
         """
         list_data: list = []

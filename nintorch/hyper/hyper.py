@@ -13,15 +13,22 @@ __all__ = [
 
 
 def start_tuning(
-    objective, direction: str = 'maximize', n_trials: int = 10, simpler = None):
-    """TODO: checking the default value of simpler.
+    objective, 
+    direction: str = 'maximize',
+    n_trials: int = 10, 
+    sampler: Callable = None, 
+    search_space: dict = None):
+    """TODO: checking the default value of sampler.
     """
     assert direction in ['maximize', 'minimize']
     assert isinstance(n_trials, int)
-    if simpler is None:
-        study = optuna.create_study(direction=direction)
+    if sampler is None:
+        study = optuna.create_study(
+            direction=direction)
     else:
-        study = optuna.create_study(direction=direction, simpler=simpler)
+        study = optuna.create_study(
+            direction=direction, 
+            sampler=sampler(search_space))
     study.optimize(objective, n_trials=n_trials)
     return study
 
@@ -37,7 +44,9 @@ def default_trial(trial):
 
 
 def default_objective(
-        epoch: int, trainer, trial_func: Callable, trial: Callable) -> float:
+        epoch: int, trainer, 
+        trial_func: Callable,
+        trial: Callable) -> float:
     """Wrapped objective function for hyper parameter training.
     """
     assert isinstance(epoch, int)

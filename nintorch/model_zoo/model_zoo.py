@@ -48,7 +48,6 @@ class LeNet5(BaseNet):
         x = self.features(x)
         x = self.flatten(x)
         x = self.classifier(x)
-        x = F.log_softmax(x, dim=-1)
         return x
 
 
@@ -112,6 +111,5 @@ class VGG16BN(BaseNet):
         x = self.features(x)
         x = self.flatten(x)
         x = self.classifier(x)
-        x = F.log_softmax(x, dim=-1)
         return x
 

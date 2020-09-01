@@ -5,7 +5,7 @@
 # TODO: do with albumentation library.
 # TODO: update with DataSet for loading this one. Using with base and pandas?
 # TODO: DataSet display the image and denormalize images. 
-# TODO: DataSet 
+# TODO: Update dataset with Nvidia-dali for faster loading!
 """
 import pandas as pd
 import torch
@@ -28,7 +28,8 @@ __all__ = [
     'CIFAR100_MEAN',
     'CIFAR100_STD',
     'IMAGENET_MEAN',
-    'IMAGENET_MEAN']
+    'IMAGENET_MEAN'
+    ]
 
 CIFAR10_MEAN = [0.4914, 0.4822, 0.4465]
 CIFAR10_STD = [0.2023, 0.1994, 0.2010]
@@ -61,9 +62,12 @@ def load_dataset(
         dataset: str = 'mnist', 
         roof: str = './dataset',
         transforms_list : list = None) -> tuple:
-    """Using torchvision to load the provided dataset online.
+    r"""Using torchvision to load the provided dataset online.
+    
     Can using with predefinded transform function with the predefind mean and std. 
     Using transform_list=normalize_transforms(CIFAR10_MEAN, CIFAR10_STD)
+    Args:
+        num_train_batch (int): number of training batch.
     """
     assert isinstance(num_train_batch, int)
     assert isinstance(num_test_batch, int)
@@ -80,78 +84,108 @@ def load_dataset(
 
     if dataset == 'mnist':
         train_set = torchvision.datasets.MNIST(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True,
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch, 
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.MNIST(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False, 
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch, 
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'fmnist':
         train_set = torchvision.datasets.FashionMNIST(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True, 
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch,
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.FashionMNIST(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False, 
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch, 
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'kmnist':
         train_set = torchvision.datasets.KMNIST(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True,
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch,
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.FashionMNIST(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False, 
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch, 
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'emnist':
         train_set = torchvision.datasets.EMNIST(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True,
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch, 
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.FashionMNIST(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False, 
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch, 
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'cifar10':
         train_set = torchvision.datasets.CIFAR10(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True, 
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch,
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.CIFAR10(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False, 
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch,
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'cifar100':
         train_set = torchvision.datasets.CIFAR100(
-            root=roof, train=True, download=True, transform=transforms_list)
+            root=roof, train=True,
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch,
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.CIFAR100(
-            root=roof, train=False, download=True, transform=transforms_list)
+            root=roof, train=False,
+            download=True, transform=transforms_list)
         test_loader = DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch, 
+            shuffle=False, num_workers=num_worker)
 
     elif dataset == 'svhn':
         # The extra-section or extra_set is exist in this dataset.
         train_set = torchvision.datasets.SVHN(
-            root=roof, split='train', download=True, transform=transforms_list)
+            root=roof, split='train',
+            download=True, transform=transforms_list)
         train_loader = DataLoader(
-            train_set, batch_size=num_train_batch, shuffle=True, num_workers=num_worker)
+            train_set, batch_size=num_train_batch,
+            shuffle=True, num_workers=num_worker)
         test_set = torchvision.datasets.SVHN(
-            root=roof, split='test', download=True, transform=transforms_list)
+            root=roof, split='test', 
+            download=True, transform=transforms_list)
         test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=num_test_batch, shuffle=False, num_workers=num_worker)
+            test_set, batch_size=num_test_batch,
+            shuffle=False, num_workers=num_worker)
         extra_set = torchvision.datasets.SVHN(
-            root=roof, split='extra', download=True, transform=transforms_list)
+            root=roof, split='extra'
+            , download=True, transform=transforms_list)
         extra_loader = DataLoader(
-            extra_set, batch_size=num_extra_batch, shuffle=False, num_workers=num_worker)
+            extra_set, batch_size=num_extra_batch, 
+            shuffle=False, num_workers=num_worker)
         return train_loader, test_loader, extra_loader
     else:
         raise NotImplementedError(
@@ -161,7 +195,11 @@ def load_dataset(
 
 
 class BaseDataset(Dataset):
-    def __init__(self, roof: str, transforms: list, *args, **kwargs):
+    """
+    Attributes:
+        
+    """
+    def __init__(self, roof: str, transforms: list, *args, **kwargs) -> None:
         pass
     
     def __len__(self):
@@ -170,27 +208,30 @@ class BaseDataset(Dataset):
     def __getitem__(self):
         pass
     
-    def get_mean(self):
+    def get_mean_chl(self):
+        
         pass
     
-    def get_std(self):
+    def get_std_chl(self):
         pass
     
     def profile_load_time(self):
         pass
     
-    def denormalize(self):
+    def denormalize(self, mean, variance):
         """For reversing the normalization of image back to [0, 255] pixel intensity. 
         Designed for visuaization or show the image.
         """
         pass
     
-    def plot_examples(self):
+    def plot_examples(self, ):
         pass
     
 
 class CsvDataset(BaseDataset):
-    def __init__(self, csv_file: str, *args, **kwargs):
+    """Given csv file with.
+    """
+    def __init__(self, csv_file: pd.DataFrame, *args, **kwargs) -> None:
         pass
     
     

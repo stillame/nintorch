@@ -62,3 +62,4 @@ Please look at comments or docstrings within the functions and classes.
 - Make trainer generalize to the more than one inputs and outputs.
 - Update tqdm to display metric and loss.
 - Update Trainer before epoch, after epoch, before batch, after batch, before .backward and before optim. Using concept from distiller.
+- 
