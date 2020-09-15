@@ -5,7 +5,7 @@
 import os
 from loguru import logger
 import pytest
-from nintorch import init_logger
+from nintorch.utils import init_logger
 
 
 def test_init_logger():

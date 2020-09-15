@@ -23,18 +23,22 @@ __all__ = [
     'normalize_transforms',
     'crop_filp_normalize_transforms',
     'crop_filp_transforms',
+    'NORMAL_MEAN',
+    'NORMAL_STD',
     'CIFAR10_MEAN',
     'CIFAR10_STD',
     'CIFAR100_MEAN',
     'CIFAR100_STD',
     'IMAGENET_MEAN',
-    'IMAGENET_MEAN'
-    ]
+    'IMAGENET_MEAN',]
 
+NORMAL_MEAN = [0.5, 0.5, 0.5]
+NORMAL_STD = [0.5, 0.5, 0.5]
 CIFAR10_MEAN = [0.4914, 0.4822, 0.4465]
 CIFAR10_STD = [0.2023, 0.1994, 0.2010]
 CIFAR100_MEAN = [0.5071, 0.4867, 0.4408]
 CIFAR100_STD = [0.2675, 0.2565, 0.2761]
+# Pytorch official mean and std.
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
@@ -63,11 +67,11 @@ def load_dataset(
         roof: str = './dataset',
         transforms_list : list = None) -> tuple:
     r"""Using torchvision to load the provided dataset online.
-    
     Can using with predefinded transform function with the predefind mean and std. 
     Using transform_list=normalize_transforms(CIFAR10_MEAN, CIFAR10_STD)
     Args:
         num_train_batch (int): number of training batch.
+        num_test_batch (int): number of test batch.
     """
     assert isinstance(num_train_batch, int)
     assert isinstance(num_test_batch, int)
@@ -95,7 +99,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch, 
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'fmnist':
         train_set = torchvision.datasets.FashionMNIST(
             root=roof, train=True, 
@@ -109,7 +112,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch, 
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'kmnist':
         train_set = torchvision.datasets.KMNIST(
             root=roof, train=True,
@@ -123,7 +125,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch, 
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'emnist':
         train_set = torchvision.datasets.EMNIST(
             root=roof, train=True,
@@ -137,7 +138,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch, 
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'cifar10':
         train_set = torchvision.datasets.CIFAR10(
             root=roof, train=True, 
@@ -151,7 +151,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch,
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'cifar100':
         train_set = torchvision.datasets.CIFAR100(
             root=roof, train=True,
@@ -165,7 +164,6 @@ def load_dataset(
         test_loader = DataLoader(
             test_set, batch_size=num_test_batch, 
             shuffle=False, num_workers=num_worker)
-
     elif dataset == 'svhn':
         # The extra-section or extra_set is exist in this dataset.
         train_set = torchvision.datasets.SVHN(
@@ -203,7 +201,7 @@ class BaseDataset(Dataset):
         pass
     
     def __len__(self):
-        pass
+        return
     
     def __getitem__(self):
         pass

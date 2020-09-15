@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ninstd.path import del_dir_or_file
-from nintorch import Trainer, HyperTrainer
+from nintorch.trainer import Trainer, HyperTrainer
 from nintorch.dataset import load_dataset
 from nintorch.model_zoo import LeNet5
 from nintorch.hyper import start_tuning, default_trial, default_objective
