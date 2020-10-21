@@ -8,7 +8,6 @@ from typing import List, Tuple, Callable
 
 import optuna
 from tqdm import tqdm
-from apex import amp
 import numpy as np
 import torch
 import torch.optim as optim
@@ -21,7 +20,6 @@ from ..utils import AvgMeter, torch_cpu_or_gpu
 
 __all__ = [
     'Trainer',
-    'HyperTrainer',
 ]
 
 class EarlyStopper(object):
